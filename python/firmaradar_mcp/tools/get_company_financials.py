@@ -61,20 +61,40 @@ async def handle(
     )
     if not isinstance(payload, dict):
         payload = {}
-    years_raw = payload.get("years") or payload.get("aar") or []
+    # Lars-runde-2-fix 2026-05-26: backend bruker "items" + "regnskapsar"
+    # + "driftsinntekter" — ikke "years"/"aar"/"omsetning" som tool-stub
+    # antok. Schema-mismatch ga `years: []` selv om data fantes (525 MNOK
+    # omsetning verifisert for Peppes Pizza 984388659).
+    years_raw = (
+        payload.get("items")
+        or payload.get("years")  # backward-compat hvis backend endrer
+        or []
+    )
+    def _year_of(y: dict) -> int | None:
+        for key in ("regnskapsar", "aar", "year"):
+            val = y.get(key)
+            if val is not None:
+                try:
+                    return int(val)
+                except (TypeError, ValueError):
+                    pass
+        return None
     years_parsed = [
         FinancialYear(
-            aar=int(y.get("aar")),
-            omsetning=y.get("omsetning"),
-            driftsresultat=y.get("driftsresultat"),
-            aarsresultat=y.get("aarsresultat"),
-            sum_egenkapital=y.get("sum_egenkapital") or y.get("ek"),
-            sum_gjeld=y.get("sum_gjeld") or y.get("gjeld"),
-            antall_ansatte=y.get("antall_ansatte") or y.get("ansatte"),
+            aar=_year_of(y) or 0,
+            omsetning=int(y["driftsinntekter"]) if y.get("driftsinntekter") is not None else (y.get("omsetning") or None),
+            driftsresultat=int(y["driftsresultat"]) if y.get("driftsresultat") is not None else None,
+            aarsresultat=int(y["aarsresultat"]) if y.get("aarsresultat") is not None else None,
+            sum_egenkapital=(
+                int(y["egenkapital"]) if y.get("egenkapital") is not None
+                else (int(y["sum_egenkapital"]) if y.get("sum_egenkapital") is not None else None)
+            ),
+            sum_gjeld=int(y["sum_gjeld"]) if y.get("sum_gjeld") is not None else None,
+            antall_ansatte=y.get("antall_ansatte"),
             raw=y,
         )
         for y in years_raw
-        if y.get("aar") is not None
+        if _year_of(y) is not None
     ]
     # Bygg kort utviklings-summary for siste 3 år hvis tilgjengelig.
     summary = None

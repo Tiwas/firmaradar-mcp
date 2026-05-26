@@ -142,7 +142,27 @@ class FirmaradarClient:
     @staticmethod
     def _handle_response(response: httpx.Response) -> Any:
         if response.is_success:
-            return response.json()
+            # Defensive JSON-parse: tidligere ga vi en cryptic
+            # "Expecting value: line 1 column 1 (char 0)" når server svarte
+            # 2xx med tom eller ikke-JSON body (nginx-buffer-issue,
+            # upstream-timeout, gzip-mismatch). Nå returnerer vi en
+            # informativ feil som inkluderer status-kode + body-preview.
+            if not response.content:
+                raise FirmaradarClientError(
+                    "Server returned empty body for a successful response. "
+                    "Likely upstream-timeout or proxy-buffer issue — retry "
+                    "the call. If persistent, contact support.",
+                    status_code=response.status_code,
+                )
+            try:
+                return response.json()
+            except ValueError as exc:
+                preview = (response.text or "")[:200]
+                raise FirmaradarClientError(
+                    f"Server returned non-JSON body (HTTP {response.status_code}). "
+                    f"Body-preview: {preview!r}. JSON-decode-error: {exc}",
+                    status_code=response.status_code,
+                )
         retry_after = response.headers.get("Retry-After")
         try:
             payload = response.json()

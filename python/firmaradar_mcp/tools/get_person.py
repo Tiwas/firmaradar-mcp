@@ -69,11 +69,36 @@ async def handle(
         try:
             roles_payload = await client.get(f"/api/v1/person/roles/{pid}")
             if isinstance(roles_payload, dict):
-                navn = roles_payload.get("navn", "") or navn
-                for r in roles_payload.get("roles") or []:
-                    # Filtrer på aktive roller (til_dato tom eller framover)
-                    if not r.get("til_dato"):
-                        active_roles.append(r)
+                # Lars-runde-2-fix 2026-05-26: backend bruker "name" +
+                # "companies" + "birth_year" + "role_types[]". Tool-stub
+                # antok "navn" + "roles" — schema-mismatch.
+                navn = roles_payload.get("name") or roles_payload.get("navn") or navn
+                by_raw = roles_payload.get("birth_year")
+                if by_raw is not None:
+                    try:
+                        birth_year = int(by_raw)
+                    except (TypeError, ValueError):
+                        pass
+                for c in roles_payload.get("companies") or roles_payload.get("roles") or []:
+                    if not isinstance(c, dict):
+                        continue
+                    # Bare aktive roller (active=true eller manglende til_dato)
+                    is_active = c.get("active")
+                    if is_active is False:
+                        continue
+                    if is_active is None and c.get("til_dato"):
+                        continue
+                    role_types = c.get("role_types") or (
+                        [c["rolle_type"]] if c.get("rolle_type") else []
+                    )
+                    for rt in role_types or [None]:
+                        active_roles.append({
+                            "orgnr": c.get("orgnr"),
+                            "company_name": c.get("company_name") or c.get("navn"),
+                            "rolle_type": rt,
+                            "founded_year": c.get("founded_year"),
+                            "active": is_active if is_active is not None else True,
+                        })
         except FirmaradarClientError:
             pass
 
@@ -81,7 +106,7 @@ async def handle(
         try:
             sh_payload = await client.get(f"/api/v1/person/shareholdings/{pid}")
             if isinstance(sh_payload, dict):
-                navn = sh_payload.get("navn", "") or navn
+                navn = sh_payload.get("name") or sh_payload.get("navn") or navn
                 shareholdings = list(sh_payload.get("shareholdings") or [])
         except FirmaradarClientError:
             pass

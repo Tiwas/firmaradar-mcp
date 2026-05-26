@@ -49,20 +49,36 @@ async def handle(
     )
     if not isinstance(payload, dict):
         payload = {}
-    roles_raw = payload.get("roles") or []
-    roles = [
-        CompanyRole(
-            orgnr=str(r.get("orgnr", "")),
-            navn=str(r.get("navn", "")),
-            rolle_type=str(r.get("rolle_type", "")),
-            fra_dato=r.get("fra_dato"),
-            til_dato=r.get("til_dato"),
-        )
-        for r in roles_raw
-    ]
+    # Lars-runde-2-fix 2026-05-26: backend bruker "name" + "companies"
+    # (med role_types-array per selskap), ikke "navn" + "roles" som
+    # tool-stub antok. Schema-mismatch ga tomt skall for Mette Vonen
+    # selv om backend hadde Daglig leder + Varamedlem hos ZERO FIVE.
+    companies_raw = payload.get("companies") or payload.get("roles") or []
+    # Hver "company" har en rolle-typer-liste — flatten til én rad per
+    # (company, role_type) for å passe MCP-tool-skjemaet.
+    roles: list[CompanyRole] = []
+    for c in companies_raw:
+        if not isinstance(c, dict):
+            continue
+        orgnr = str(c.get("orgnr", ""))
+        nav = str(c.get("company_name") or c.get("navn") or "")
+        role_types = c.get("role_types") or []
+        if not role_types:
+            # Backward-compat: hvis "rolle_type" finnes direkte
+            single_role = c.get("rolle_type") or c.get("role_type")
+            if single_role:
+                role_types = [single_role]
+        for rt in role_types or [None]:
+            roles.append(CompanyRole(
+                orgnr=orgnr,
+                navn=nav,
+                rolle_type=str(rt) if rt else "",
+                fra_dato=c.get("fra_dato"),
+                til_dato=c.get("til_dato"),
+            ))
     return GetPersonRolesOutput(
         role_person_id=str(payload.get("role_person_id", params.role_person_id)),
-        navn=str(payload.get("navn", "")),
+        navn=str(payload.get("name") or payload.get("navn") or ""),
         roles=roles,
         total_roles=int(payload.get("total_roles", len(roles))),
     )

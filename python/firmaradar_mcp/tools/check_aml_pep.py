@@ -71,21 +71,31 @@ async def handle(
     """Invoke ``POST /api/v1/aml/check`` with DPA-confirmation headers.
 
     The ``purpose`` field is mapped to ``X-FR-Purpose`` and
-    ``X-FR-DPA-Confirmed: true`` is set automatically (the tool's
-    presence already signals the operator has signed a DPA — call-time
-    purpose-string is the per-call addendum).
+    ``X-FR-DPA-Confirmed: true`` is set automatically.
+
+    HTTP headers are ASCII-only per RFC 7230, so non-ASCII characters
+    in ``purpose`` (æøå, em-dash, etc.) must be URL-encoded before
+    being passed as a header value. Backend reverses the encoding via
+    ``urllib.parse.unquote`` before audit-logging.
     """
+    from urllib.parse import quote
+
     payload = {
         "name": params.name,
         "birth_year": params.birth_year,
         "kategori": params.kategori,
         "min_match_ratio": params.min_match_ratio,
     }
+    # Encode purpose as RFC 3986 percent-encoding (UTF-8 → %XX bytes).
+    # `safe=""` ensures even space → %20 (no '+' substitution which would
+    # be valid in form-data but ambiguous in headers).
+    encoded_purpose = quote(params.purpose, safe="")
     data = await client.post(
         "/api/v1/aml/check",
         json_body=payload,
         extra_headers={
-            "X-FR-Purpose": params.purpose,
+            "X-FR-Purpose": encoded_purpose,
+            "X-FR-Purpose-Encoding": "url",
             "X-FR-DPA-Confirmed": "true",
         },
     )

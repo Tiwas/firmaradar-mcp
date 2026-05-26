@@ -75,11 +75,19 @@ async def handle(
             )
             if not isinstance(payload, dict):
                 return orgnr, {}
-            return orgnr, {
-                int(y["aar"]): y
-                for y in (payload.get("years") or [])
-                if y.get("aar") is not None
-            }
+            # Lars-runde-2-fix 2026-05-26: backend bruker "items"/"regnskapsar",
+            # ikke "years"/"aar".
+            items = payload.get("items") or payload.get("years") or []
+            year_map: dict[int, dict[str, Any]] = {}
+            for y in items:
+                year_val = y.get("regnskapsar") or y.get("aar")
+                if year_val is None:
+                    continue
+                try:
+                    year_map[int(year_val)] = y
+                except (TypeError, ValueError):
+                    continue
+            return orgnr, year_map
         except FirmaradarClientError:
             return orgnr, {}
 
@@ -92,26 +100,39 @@ async def handle(
         all_years_set.update(years_map.keys())
     years_sorted = sorted(all_years_set)
 
+    # Map MCP-tool-metric-navn til backend-feltnavn (BRREG-konvensjon).
+    # Lars-runde-2-fix 2026-05-26: backend bruker "driftsinntekter" (ikke
+    # "omsetning"), "egenkapital" (ikke "sum_egenkapital").
+    _METRIC_FIELD_MAP = {
+        "omsetning": "driftsinntekter",
+        "driftsresultat": "driftsresultat",
+        "aarsresultat": "aarsresultat",
+        "sum_egenkapital": "egenkapital",
+        "sum_gjeld": "sum_gjeld",
+        "antall_ansatte": "antall_ansatte",
+    }
+
     # Bygg comparison-matrise: {metric: {orgnr: [verdi per år]}}
     comparison: dict[str, dict[str, list[Any]]] = {}
     for metric in metrics:
+        backend_field = _METRIC_FIELD_MAP.get(metric, metric)
         comparison[metric] = {}
         for orgnr in params.orgnrs:
             year_data = per_orgnr_data.get(orgnr, {})
             comparison[metric][orgnr] = [
-                year_data.get(y, {}).get(metric) for y in years_sorted
+                year_data.get(y, {}).get(backend_field) for y in years_sorted
             ]
 
     summary = None
     if years_sorted and per_orgnr_data:
         latest_year = years_sorted[-1]
         omsetninger = [
-            (o, per_orgnr_data.get(o, {}).get(latest_year, {}).get("omsetning") or 0)
+            (o, per_orgnr_data.get(o, {}).get(latest_year, {}).get("driftsinntekter") or 0)
             for o in params.orgnrs
         ]
         omsetninger.sort(key=lambda t: t[1], reverse=True)
         if omsetninger and omsetninger[0][1]:
-            summary = f"Største omsetning {latest_year}: {omsetninger[0][0]} ({omsetninger[0][1]:,} NOK)"
+            summary = f"Største omsetning (driftsinntekter) {latest_year}: {omsetninger[0][0]} ({int(omsetninger[0][1]):,} NOK)"
 
     return CompareCompaniesOutput(
         orgnrs=params.orgnrs,
