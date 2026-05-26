@@ -1,0 +1,16 @@
+Firmaradar MCP Server
+Copyright 2026 Firmaradar AS
+
+This product includes software developed at Firmaradar AS
+(https://firmaradar.no).
+
+The MCP stdio-server (`firmaradar-mcp`) is a thin client over the
+public Firmaradar REST API at https://firmaradar.no/api/v1/.
+Usage of the API requires a Firmaradar account and an API key —
+see https://firmaradar.no/prising for tiers and rate limits.
+
+Dependencies (see python/pyproject.toml + typescript/package.json
+for the canonical version pins):
+* mcp (Model Context Protocol SDK) — Apache 2.0
+* httpx — BSD-3-Clause
+* pydantic — MIT

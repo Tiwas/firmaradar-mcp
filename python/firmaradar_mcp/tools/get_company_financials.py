@@ -1,0 +1,113 @@
+"""Tool: ``get_company_financials``.
+
+Historic financial metrics (omsetning, driftsresultat, ek, gjeld,
+antall ansatte) for a company. Defaults to the last 5 years.
+
+Backend status: **EXISTS** — wraps
+``GET /api/regnskap/<orgnr>/historikk?years=5`` (see
+``src/firmaradar/portal/routes_search.py:763``).
+"""
+
+from __future__ import annotations
+
+from typing import Any, Literal
+
+from pydantic import BaseModel, Field
+
+from ..client import FirmaradarClient
+from . import ToolHandler
+
+
+class GetCompanyFinancialsInput(BaseModel):
+    orgnr: str = Field(description="9-digit orgnr.")
+    years: int = Field(default=5, ge=1, le=20)
+    regnskapstype: Literal["SELSKAP", "KONSERN"] = Field(default="SELSKAP")
+    skip_freshness: bool = Field(
+        default=False,
+        description="Skip the inline freshness fetch (faster, but may return stale data).",
+    )
+
+
+class FinancialYear(BaseModel):
+    aar: int
+    omsetning: int | None = None
+    driftsresultat: int | None = None
+    aarsresultat: int | None = None
+    sum_egenkapital: int | None = None
+    sum_gjeld: int | None = None
+    antall_ansatte: int | None = None
+    raw: dict[str, Any] | None = None
+
+
+class GetCompanyFinancialsOutput(BaseModel):
+    orgnr: str
+    regnskapstype: str
+    years: list[FinancialYear]
+    freshness: dict[str, Any] | None = None
+    summary: str | None = None
+
+
+async def handle(
+    client: FirmaradarClient, params: GetCompanyFinancialsInput
+) -> GetCompanyFinancialsOutput:
+    qp: dict[str, Any] = {
+        "years": params.years,
+        "regnskapstype": params.regnskapstype,
+    }
+    if params.skip_freshness:
+        qp["skip_freshness"] = 1
+    payload = await client.get(
+        f"/api/regnskap/{params.orgnr}/historikk", params=qp
+    )
+    if not isinstance(payload, dict):
+        payload = {}
+    years_raw = payload.get("years") or payload.get("aar") or []
+    years_parsed = [
+        FinancialYear(
+            aar=int(y.get("aar")),
+            omsetning=y.get("omsetning"),
+            driftsresultat=y.get("driftsresultat"),
+            aarsresultat=y.get("aarsresultat"),
+            sum_egenkapital=y.get("sum_egenkapital") or y.get("ek"),
+            sum_gjeld=y.get("sum_gjeld") or y.get("gjeld"),
+            antall_ansatte=y.get("antall_ansatte") or y.get("ansatte"),
+            raw=y,
+        )
+        for y in years_raw
+        if y.get("aar") is not None
+    ]
+    # Bygg kort utviklings-summary for siste 3 år hvis tilgjengelig.
+    summary = None
+    if len(years_parsed) >= 2:
+        sorted_years = sorted(years_parsed, key=lambda y: y.aar)
+        latest = sorted_years[-1]
+        prior = sorted_years[-2]
+        if latest.omsetning and prior.omsetning:
+            delta_pct = round((latest.omsetning - prior.omsetning) / prior.omsetning * 100, 1)
+            summary = (
+                f"Omsetning {latest.aar}: {latest.omsetning:,} NOK "
+                f"({'+' if delta_pct >= 0 else ''}{delta_pct}% vs {prior.aar}). "
+                f"Driftsresultat: {latest.driftsresultat:,} NOK." if latest.driftsresultat else
+                f"Omsetning {latest.aar}: {latest.omsetning:,} NOK ({'+' if delta_pct >= 0 else ''}{delta_pct}% vs {prior.aar})."
+            )
+    return GetCompanyFinancialsOutput(
+        orgnr=str(payload.get("orgnr", params.orgnr)),
+        regnskapstype=str(payload.get("regnskapstype", params.regnskapstype)),
+        years=years_parsed,
+        freshness=payload.get("freshness"),
+        summary=summary,
+    )
+
+
+HANDLER = ToolHandler(
+    name="firmaradar.get_company_financials",
+    description=(
+        "Fetch the last N years (default 5) of financial metrics for a "
+        "Norwegian company: revenue, operating result, equity, debt, "
+        "employees. Use when the user asks 'how is X AS doing financially?' "
+        "or 'show me the revenue trend'."
+    ),
+    input_schema=GetCompanyFinancialsInput,
+    output_schema=GetCompanyFinancialsOutput,
+    handler=handle,
+)

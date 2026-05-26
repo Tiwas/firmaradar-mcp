@@ -1,0 +1,131 @@
+"""Tool: ``get_company_signals``.
+
+Aggregated risk signals: bankruptcy score, capital-loss flags,
+recent role/signature changes, M&A interim-balance signals and KYC
+announcement anomalies in one envelope.
+
+Backend status: **READY (v0.2)** — orchestrates 3 sources via
+``GET /api/v1/company/<orgnr>/signals`` (commit 2026-05-26).
+"""
+
+from __future__ import annotations
+
+from typing import Any, Literal
+
+from pydantic import BaseModel, Field
+
+from ..client import FirmaradarClient
+from . import ToolHandler
+
+
+class GetCompanySignalsInput(BaseModel):
+    orgnr: str = Field(description="9-digit orgnr.")
+    since: str | None = Field(
+        default=None,
+        description="ISO 8601 date — only signals on/after this date. Defaults to 90 days back.",
+    )
+
+
+class KycSignal(BaseModel):
+    type: str
+    kunngjoring_dato: str | None = None
+    kategori: str | None = None
+    payload: dict[str, Any] | None = None
+
+
+class GetCompanySignalsOutput(BaseModel):
+    orgnr: str
+    distress_category: Literal["green", "yellow", "red", "unknown"] | None = None
+    distress_score: float | None = None
+    distress_reasons: list[str] = Field(default_factory=list)
+    kyc_signals: list[KycSignal] = Field(default_factory=list)
+    interim_balance_signal: dict[str, Any] | None = None
+    recent_role_changes_count: int = 0
+    generated_at: str | None = None
+    summary: str | None = None
+
+
+async def handle(
+    client: FirmaradarClient, params: GetCompanySignalsInput
+) -> GetCompanySignalsOutput:
+    qp: dict[str, Any] = {}
+    if params.since:
+        qp["since"] = params.since
+    payload = await client.get(
+        f"/api/v1/company/{params.orgnr}/signals", params=qp
+    )
+    if not isinstance(payload, dict):
+        payload = {}
+
+    # ── Distress-blokk → top-level felter på output ────────────────────
+    distress = payload.get("distress") if isinstance(payload.get("distress"), dict) else None
+    distress_score: float | None = None
+    distress_reasons: list[str] = []
+    distress_category: str | None = None
+    if distress and not distress.get("error"):
+        raw_score = distress.get("score")
+        try:
+            distress_score = float(raw_score) if raw_score is not None else None
+        except (TypeError, ValueError):
+            distress_score = None
+        # Map server-side status til output-kategori (server: 'distress',
+        # 'no_distress', 'insufficient_data', etc. → green/yellow/red)
+        status = (distress.get("status") or "").lower()
+        if status == "distress":
+            distress_category = "red"
+        elif status == "no_distress":
+            distress_category = "green"
+        elif status in ("warning", "yellow"):
+            distress_category = "yellow"
+        else:
+            distress_category = "unknown"
+        for rule in (distress.get("rules_fired") or []):
+            if isinstance(rule, dict) and rule.get("description"):
+                distress_reasons.append(str(rule["description"]))
+
+    # ── KYC-signaler ───────────────────────────────────────────────────
+    kyc_block = payload.get("kyc_signals") if isinstance(payload.get("kyc_signals"), dict) else {}
+    kyc_signals_raw = kyc_block.get("signals") or []
+    kyc_signals: list[KycSignal] = []
+    for sig in kyc_signals_raw:
+        if not isinstance(sig, dict):
+            continue
+        kyc_signals.append(
+            KycSignal(
+                type=str(sig.get("kunngjoring_type") or sig.get("type") or ""),
+                kunngjoring_dato=str(sig.get("dato") or sig.get("kunngjoring_dato") or "") or None,
+                kategori=sig.get("kategori"),
+                payload=sig if isinstance(sig, dict) else None,
+            )
+        )
+
+    interim = payload.get("interim_balance") if isinstance(payload.get("interim_balance"), dict) else None
+    # interim kan være {"error": "..."} ved kilde-feil
+    if interim and interim.get("error"):
+        interim = None
+
+    return GetCompanySignalsOutput(
+        orgnr=str(payload.get("orgnr", params.orgnr)),
+        distress_category=distress_category,
+        distress_score=distress_score,
+        distress_reasons=distress_reasons,
+        kyc_signals=kyc_signals,
+        interim_balance_signal=interim,
+        recent_role_changes_count=0,  # ikke en del av v0.2-payload; v0.3
+        generated_at=None,
+        summary=None,
+    )
+
+
+HANDLER = ToolHandler(
+    name="firmaradar.get_company_signals",
+    description=(
+        "Aggregated risk signals for one company: bankruptcy/distress score, "
+        "capital-loss flags, recent role/signature changes, M&A interim-balance "
+        "signals and KYC announcement anomalies. Use as the second step after "
+        "`get_company` to evaluate whether a company needs deeper due diligence."
+    ),
+    input_schema=GetCompanySignalsInput,
+    output_schema=GetCompanySignalsOutput,
+    handler=handle,
+)
