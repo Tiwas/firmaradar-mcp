@@ -47,18 +47,23 @@ class ToolHandler:
 
 from . import (  # noqa: E402
     check_aml_pep,
+    check_foretak_i_vanskeligheter,
     compare_companies,
     find_related_companies,
+    get_aml_score,
     get_company,
     get_company_announcements,
     get_company_financials,
     get_company_ownership,
     get_company_roles,
     get_company_signals,
+    get_konsernstotte,
     get_person,
     get_person_companies,
     get_person_roles,
     get_recent_changes,
+    get_risk_score,
+    get_skattelister,
     list_companies_in_nace,
     search_announcements,
     search_companies,
@@ -89,6 +94,12 @@ ALL_TOOLS: list[ToolHandler] = [
     compare_companies.HANDLER,
     # Tverr-søk (1)
     search_announcements.HANDLER,
+    # ── v0.3 markedsplass-utvidelser (#130, 2026-05-27) (5) ──
+    get_risk_score.HANDLER,
+    check_foretak_i_vanskeligheter.HANDLER,
+    get_aml_score.HANDLER,
+    get_konsernstotte.HANDLER,
+    get_skattelister.HANDLER,
 ]
 
 
