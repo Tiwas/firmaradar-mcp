@@ -74,10 +74,24 @@ HANDLER = ToolHandler(
     name="firmaradar_get_risk_score",
     description=(
         "Structured risk score (0-100) with named level (lav/moderat/høy/kritisk) "
-        "and component breakdown for a Norwegian company. Combines distress "
-        "classification, BRREG status, age, capital signals and other factors "
-        "into a single comparable score. Use for credit decisions, supplier "
-        "screening, KYC risk triage."
+        "and component breakdown for a Norwegian COMPANY's financial health. "
+        "Combines distress classification, BRREG status, age, capital signals "
+        "and other factors into one comparable score. Returns blocked_enk error "
+        "for sole-proprietorships (ENK).\n\n"
+        "SCOPE: Company financial health only. NOT a personal credit check on "
+        "owners or officers. For full KYC pre-screening, combine with "
+        "firmaradar_get_aml_score (PEP/sanctions on key persons). "
+        "Personal tax-record integration (firmaradar_get_skattelister for "
+        "persons) is gated pending Skatteetaten data-access approval.\n\n"
+        "**Krever første-gangs bekreftelse av pre-screening-disclaimer.** "
+        "Hvis dette returnerer HTTP 403 med error_code `kundebekreftelse_required` "
+        "eller `disclaimer_required`: agenten kan ringe "
+        "`firmaradar_confirm_risk_score_disclaimer` for å bekrefte på vegne "
+        "av brukeren (per OAuth-bruker, audit-logget). Bekreftelsen er "
+        "per-konto, ikke per-kall, og gjelder permanent. Alternativt kan "
+        "brukeren bekrefte manuelt på "
+        "https://firmaradar.no/minbedrift/utvidelser/risikoscoring — begge "
+        "veier skriver til samme audit-tabell."
     ),
     input_schema=GetRiskScoreInput,
     output_schema=GetRiskScoreOutput,

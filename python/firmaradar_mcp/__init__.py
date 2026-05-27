@@ -1,4 +1,4 @@
-"""Firmaradar MCP stdio-server — v0.1.
+"""Firmaradar MCP stdio-server — v0.3.
 
 Exposes 17 read-only "melk og brød"-tools (company, person, risk,
 sector, announcement) over the Model Context Protocol so that
@@ -11,5 +11,5 @@ See ``tools/mcp_server/README.md`` for setup, and
 
 from __future__ import annotations
 
-__version__ = "0.1.0a0"
+__version__ = "0.3.0"
 __all__ = ["__version__"]

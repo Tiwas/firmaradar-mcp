@@ -4,27 +4,42 @@ build-backend = "hatchling.build"
 
 [project]
 name = "firmaradar-mcp"
-version = "0.3.0a0"
+version = "0.3.0"
 description = "MCP stdio-server exposing Firmaradar's company/person/risk tools to AI agents."
 readme = "../README.md"
-requires-python = ">=3.11"
+requires-python = ">=3.10"
+# Privat repo bruker "Proprietary"; sync_mcp_public.sh patcher dette til
+# "Apache-2.0" når pakken speiles til Tiwas/firmaradar-mcp.
 license = "Apache-2.0"
 authors = [
-    { name = "Firmaradar AS" },
+    { name = "Firmaradar AS", email = "lars@firmaradar.no" },
 ]
 keywords = ["mcp", "firmaradar", "brreg", "norway", "company", "agents", "claude"]
 classifiers = [
-    "Development Status :: 2 - Pre-Alpha",
+    "Development Status :: 4 - Beta",
     "Intended Audience :: Developers",
+    "Intended Audience :: Financial and Insurance Industry",
     "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+    "Topic :: Office/Business :: Financial",
+    "Operating System :: OS Independent",
 ]
 dependencies = [
     "mcp>=1.0.0",
     "httpx>=0.27",
     "pydantic>=2.6",
 ]
+
+[project.urls]
+Homepage = "https://github.com/Tiwas/firmaradar-mcp"
+Documentation = "https://firmaradar.no/dokumentasjon"
+Repository = "https://github.com/Tiwas/firmaradar-mcp"
+Issues = "https://github.com/Tiwas/firmaradar-mcp/issues"
+Changelog = "https://github.com/Tiwas/firmaradar-mcp/blob/main/python/CHANGELOG.md"
 
 [project.optional-dependencies]
 dev = [
@@ -51,14 +66,23 @@ firmaradar-mcp-remote = "firmaradar_mcp.remote_server:main"
 [tool.hatch.build.targets.wheel]
 packages = ["firmaradar_mcp"]
 
+# README ligger ett nivå over pyproject.toml (felles for python/ + typescript/).
+# Hatchling må eksplisitt forces til å inkludere filer utenfor pakken i sdist.
+[tool.hatch.build.targets.sdist]
+include = [
+    "firmaradar_mcp",
+    "tests",
+    "../README.md",
+]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 asyncio_mode = "auto"
 
 [tool.ruff]
 line-length = 100
-target-version = "py311"
+target-version = "py310"
 
 [tool.mypy]
 strict = true
-python_version = "3.11"
+python_version = "3.10"

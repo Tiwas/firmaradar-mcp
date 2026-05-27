@@ -58,11 +58,33 @@ class NaceCompanyHit(BaseModel):
     antall_ansatte: int | None = None
 
 
+class NaceCatalogInfo(BaseModel):
+    """Aggregat-counts fra ``nace_code`` (oppdateres nattlig).
+
+    Det totale antallet norske selskaper i koden, splittet i aktive (ikke
+    konkurs/avvikling) og total (alle inkl. konkurs/avvikling). Disse er
+    rullet opp i NACE-hierarkiet, så også foreldre-koder (eks. ``62``,
+    ``62.1``, ``62.10``) har realistiske counts.
+
+    ``company_count`` er en legacy-alias for ``company_count_active`` for
+    back-compat — den eldre API-en lagret kun aktive selskaper i denne
+    kolonnen.
+    """
+
+    company_count: int
+    company_count_active: int
+    company_count_total: int
+    label_no: str | None = None
+    level: int | None = None
+    parent_code: str | None = None
+
+
 class ListCompaniesInNaceOutput(BaseModel):
     nace_code: str
     total_count: int | None = None
     items: list[NaceCompanyHit]
     next_cursor: str | None = None
+    catalog: NaceCatalogInfo | None = None
 
 
 async def handle(
@@ -96,11 +118,26 @@ async def handle(
         )
         for i in items_raw
     ]
+    catalog: NaceCatalogInfo | None = None
+    raw_catalog = payload.get("catalog")
+    if isinstance(raw_catalog, dict):
+        try:
+            catalog = NaceCatalogInfo(
+                company_count=int(raw_catalog.get("company_count", 0)),
+                company_count_active=int(raw_catalog.get("company_count_active", 0)),
+                company_count_total=int(raw_catalog.get("company_count_total", 0)),
+                label_no=raw_catalog.get("label_no"),
+                level=raw_catalog.get("level"),
+                parent_code=raw_catalog.get("parent_code"),
+            )
+        except (TypeError, ValueError):
+            catalog = None
     return ListCompaniesInNaceOutput(
         nace_code=str(payload.get("nace_code", params.code)),
         total_count=payload.get("total_count"),
         items=items,
         next_cursor=payload.get("next_cursor"),
+        catalog=catalog,
     )
 
 
@@ -109,7 +146,13 @@ HANDLER = ToolHandler(
     description=(
         "List Norwegian companies in a specific NACE industry code (or code "
         "prefix), optionally filtered by status, kommune and size. Useful for "
-        "sector analysis ('all active restaurants in Oslo with > 5 employees')."
+        "sector analysis ('all active restaurants in Oslo with > 5 employees').\n\n"
+        "**NACE-format-warning:** Bruk EU NACE Rev. 2-format med trailing-null "
+        "(e.g. `62.100`, `62.200`, `58.290`). "
+        "**Norsk SN2007-format (`62.01`, `62.02`) returnerer 0 treff** — vi "
+        "lagrer ikke i SN2007. Hvis du er usikker på en kode, sjekk "
+        "`list_companies_in_nace` med ulike formater først eller bekreft mot "
+        "https://www.brreg.no."
     ),
     input_schema=ListCompaniesInNaceInput,
     output_schema=ListCompaniesInNaceOutput,

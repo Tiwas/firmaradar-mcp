@@ -1,0 +1,176 @@
+# Publish firmaradar-mcp to PyPI with build provenance via OIDC.
+#
+# Triggered on tags matching python-vMAJOR.MINOR.PATCH (e.g. python-v0.3.0).
+# CI installs the build toolchain, runs `python -m build`, validates with
+# `twine check`, and publishes to PyPI using **Trusted Publishing** (OIDC).
+# No long-lived `PYPI_API_TOKEN` is required if the publisher is configured
+# correctly on PyPI; see the fallback block below for the API-token
+# bootstrap path.
+#
+# Trusted Publishing requirement (Lars must do once):
+#   1. Create PyPI account, verify e-mail, enable 2FA.
+#   2. PyPI → Manage account → Publishing → Add a new publisher → GitHub.
+#      Owner: Tiwas
+#      Repository: firmaradar-mcp        (the synced public repo)
+#      Workflow filename: publish.yml
+#      Environment name: pypi            (must match the `environment:` key
+#                                         in the job below; gives a manual
+#                                         review-gate before each publish)
+#   3. Reserve the package name `firmaradar-mcp` by publishing this 0.3.0
+#      via the first tag push, or by manually uploading a 0.0.1 placeholder.
+#
+# Path note: This file lives at tools/mcp_server/.github/workflows/publish.yml
+# in the private monorepo. scripts/sync_mcp_public.sh mirrors it to
+# Tiwas/firmaradar-mcp/.github/workflows/publish.yml — i.e. at the public
+# repo root, which is where GitHub Actions actually picks up workflows.
+# Both the python/ source tree and the workflow are kept in lock-step that
+# way.
+#
+# Tag convention: We prefix tags with `python-v` (e.g. python-v0.3.0) so the
+# same monorepo can independently tag npm/n8n releases (v0.3.0) without the
+# two pipelines fighting for the same tag namespace. The job below verifies
+# pyproject.toml `version` matches the suffix of the tag before publishing.
+
+name: Publish to PyPI
+
+on:
+  push:
+    tags:
+      - 'python-v[0-9]+.[0-9]+.[0-9]+'
+      - 'python-v[0-9]+.[0-9]+.[0-9]+-*'
+  workflow_dispatch:
+    inputs:
+      test_pypi:
+        description: 'Publish to TestPyPI instead of PyPI (dry-run-ish)'
+        required: false
+        default: 'false'
+
+# Trusted Publishing requires id-token:write so the runner can mint an
+# OIDC token PyPI verifies against the configured publisher mapping.
+# contents: write is needed for the optional GitHub release-notes step.
+permissions:
+  contents: write
+  id-token: write
+
+jobs:
+  build:
+    name: Build sdist + wheel
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install build toolchain
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install build twine
+
+      - name: Verify version matches tag
+        if: startsWith(github.ref, 'refs/tags/python-v')
+        working-directory: python
+        run: |
+          PKG_VERSION="$(python -c 'import tomllib,pathlib; print(tomllib.loads(pathlib.Path("pyproject.toml").read_text())["project"]["version"])')"
+          TAG_VERSION="${GITHUB_REF_NAME#python-v}"
+          if [ "$PKG_VERSION" != "$TAG_VERSION" ]; then
+            echo "::error::pyproject.toml version ($PKG_VERSION) != tag ($TAG_VERSION)"
+            exit 1
+          fi
+          echo "Version $PKG_VERSION matches tag python-v$TAG_VERSION"
+
+      - name: Build sdist + wheel
+        working-directory: python
+        run: python -m build
+
+      - name: Validate with twine
+        working-directory: python
+        run: python -m twine check dist/*
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: python/dist/
+          if-no-files-found: error
+
+  publish-testpypi:
+    name: Publish to TestPyPI (workflow_dispatch only)
+    needs: build
+    if: github.event_name == 'workflow_dispatch' && github.event.inputs.test_pypi == 'true'
+    runs-on: ubuntu-latest
+    environment:
+      name: testpypi
+      url: https://test.pypi.org/project/firmaradar-mcp/
+    permissions:
+      id-token: write
+    steps:
+      - name: Download dist
+        uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist/
+
+      - name: Publish to TestPyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          repository-url: https://test.pypi.org/legacy/
+          packages-dir: dist/
+          # attestations: true adds Sigstore-backed PEP 740 attestations.
+          # Default is true; explicit here for clarity.
+          attestations: true
+
+  publish-pypi:
+    name: Publish to PyPI (tag push)
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/python-v')
+    runs-on: ubuntu-latest
+    # The `pypi` environment must match the environment name configured
+    # on PyPI Publishing settings. Drop this `environment:` block (and
+    # the publisher's environment field) if Lars opts out of the
+    # review-gate.
+    environment:
+      name: pypi
+      url: https://pypi.org/project/firmaradar-mcp/
+    permissions:
+      id-token: write
+      contents: write
+    steps:
+      - name: Download dist
+        uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist/
+
+      - name: Publish to PyPI (Trusted Publishing — OIDC)
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          packages-dir: dist/
+          # OIDC + PEP 740 attestations gives provenance comparable to
+          # `npm publish --provenance` for the n8n-pakka. PyPI displays
+          # the link back to this workflow run on the project page.
+          attestations: true
+        # ── Fallback: API-token bootstrap ──────────────────────────────
+        # If Trusted Publishing is not yet wired up, comment out the
+        # `uses:` step above and use this token-based fallback instead.
+        # Lars must create a project-scoped API token on PyPI and store
+        # it as the repo secret `PYPI_API_TOKEN`. Trusted Publishing is
+        # strictly better (no long-lived secret, signed attestations),
+        # so treat the token path as a bootstrap-only escape hatch.
+        #
+        # - name: Publish to PyPI (API token fallback)
+        #   uses: pypa/gh-action-pypi-publish@release/v1
+        #   with:
+        #     packages-dir: dist/
+        #     password: ${{ secrets.PYPI_API_TOKEN }}
+
+      - name: Create GitHub release notes
+        if: startsWith(github.ref, 'refs/tags/python-v')
+        uses: softprops/action-gh-release@v2
+        with:
+          name: ${{ github.ref_name }}
+          generate_release_notes: true
+          body_path: python/CHANGELOG.md

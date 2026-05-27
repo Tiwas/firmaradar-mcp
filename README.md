@@ -6,6 +6,8 @@
 
 **Slå opp norske selskaper, eierstrukturer, konsernhierarkier og roller direkte fra Claude, ChatGPT, Cursor, Codex, Gemini og andre MCP-kompatible agenter.**
 
+[![PyPI](https://img.shields.io/pypi/v/firmaradar-mcp.svg)](https://pypi.org/project/firmaradar-mcp/)
+[![Python](https://img.shields.io/pypi/pyversions/firmaradar-mcp.svg)](https://pypi.org/project/firmaradar-mcp/)
 [![Lisens: Apache 2.0](https://img.shields.io/badge/Lisens-Apache_2.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 [![MCP](https://img.shields.io/badge/MCP-kompatibel-success.svg)](https://modelcontextprotocol.io)
 [![Norsk data](https://img.shields.io/badge/data-norske%20selskaper-orange.svg)](https://firmaradar.no)

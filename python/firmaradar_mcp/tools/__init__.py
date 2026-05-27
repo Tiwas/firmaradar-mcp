@@ -47,8 +47,10 @@ class ToolHandler:
 
 from . import (  # noqa: E402
     check_aml_pep,
+    check_fiv_bulk,
     check_foretak_i_vanskeligheter,
     compare_companies,
+    confirm_risk_score_disclaimer,
     find_related_companies,
     get_aml_score,
     get_company,
@@ -63,6 +65,7 @@ from . import (  # noqa: E402
     get_person_roles,
     get_recent_changes,
     get_risk_score,
+    get_risk_score_bulk,
     get_skattelister,
     list_companies_in_nace,
     search_announcements,
@@ -100,6 +103,11 @@ ALL_TOOLS: list[ToolHandler] = [
     get_aml_score.HANDLER,
     get_konsernstotte.HANDLER,
     get_skattelister.HANDLER,
+    # ── v0.3 compliance-helpers (#134, 2026-05-27) (1) ──
+    confirm_risk_score_disclaimer.HANDLER,
+    # ── Bulk-portfolio-screening (#134, 2026-05-27) (2) ──
+    check_fiv_bulk.HANDLER,
+    get_risk_score_bulk.HANDLER,
 ]
 
 
