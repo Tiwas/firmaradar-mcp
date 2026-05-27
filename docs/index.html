@@ -10,7 +10,7 @@
     <!-- Open Graph -->
     <meta property="og:type" content="website">
     <meta property="og:title" content="Firmaradar MCP — agentisk tilgang til norske selskapsdata">
-    <meta property="og:description" content="Koble Claude, ChatGPT, Cursor og andre AI-agenter direkte til 2,1M norske selskaper, eierregisteret, konsern, roller, regnskap og AML.">
+    <meta property="og:description" content="Koble Claude, ChatGPT, Cursor og andre AI-agenter direkte til 2,1 millioner norske selskaper, eierregisteret, konsern, roller, regnskap og AML.">
     <meta property="og:url" content="https://tiwas.github.io/firmaradar-mcp/">
     <meta property="og:image" content="https://firmaradar.no/static/img/logo_nobg.png">
     <meta property="og:site_name" content="Firmaradar">
@@ -18,7 +18,7 @@
     <!-- Twitter card -->
     <meta name="twitter:card" content="summary_large_image">
     <meta name="twitter:title" content="Firmaradar MCP">
-    <meta name="twitter:description" content="Norske selskapsdata for AI-agenter. OAuth 2.0 + DCR. Apache 2.0.">
+    <meta name="twitter:description" content="Norske selskapsdata for AI-agenter. OAuth 2.0 og DCR. Apache 2.0.">
     <meta name="twitter:image" content="https://firmaradar.no/static/img/logo_nobg.png">
 
     <link rel="icon" type="image/png" href="https://firmaradar.no/static/img/logo_nobg.png">
@@ -408,8 +408,8 @@
             <img src="https://firmaradar.no/static/img/logo_nobg.png" alt="Firmaradar">
         </a>
         <nav class="header-nav" aria-label="Hovedmeny">
-            <a href="#tools">Tools</a>
-            <a href="#quickstart">Kom i gang</a>
+            <a href="#verktoy">Verktøy</a>
+            <a href="#kom-i-gang">Kom i gang</a>
             <a href="https://firmaradar.no/prising" target="_blank" rel="noopener">Prising</a>
             <a href="https://github.com/Tiwas/firmaradar-mcp" target="_blank" rel="noopener">GitHub</a>
             <a href="https://firmaradar.no/koble-til-agent" class="btn-primary" target="_blank" rel="noopener">Koble til</a>
@@ -424,21 +424,21 @@
         <p class="hero-lead">
             Koble Claude, ChatGPT, Cursor, Codex og Gemini direkte til 2,1 millioner norske
             enheter, Aksjeeierregisteret, roller, regnskap, kunngjøringer og AML/PEP-screening
-            — gjennom én standardisert MCP-server med OAuth 2.0 + DCR.
+            — gjennom én standardisert MCP-server med OAuth 2.0 og DCR.
         </p>
         <div class="cta-row">
             <a class="btn btn-fill" href="https://firmaradar.no/koble-til-agent" target="_blank" rel="noopener">
                 Koble til agenten din →
             </a>
-            <a class="btn btn-outline" href="#quickstart">Se quick-start</a>
+            <a class="btn btn-outline" href="#kom-i-gang">Se hvordan du kommer i gang</a>
             <a class="btn btn-outline" href="https://github.com/Tiwas/firmaradar-mcp" target="_blank" rel="noopener">
                 ⭐ GitHub
             </a>
         </div>
         <div class="badges">
-            <img src="https://img.shields.io/badge/License-Apache_2.0-blue.svg" alt="Apache 2.0">
-            <img src="https://img.shields.io/badge/MCP-compatible-success.svg" alt="MCP compatible">
-            <img src="https://img.shields.io/badge/OAuth_2.0-+_DCR-orange.svg" alt="OAuth 2.0 + DCR">
+            <img src="https://img.shields.io/badge/Lisens-Apache_2.0-blue.svg" alt="Apache 2.0">
+            <img src="https://img.shields.io/badge/MCP-kompatibel-success.svg" alt="MCP-kompatibel">
+            <img src="https://img.shields.io/badge/OAuth_2.0-og_DCR-orange.svg" alt="OAuth 2.0 og DCR">
             <img src="https://img.shields.io/badge/data-norske%20selskaper-9333ea.svg" alt="Norske selskaper">
         </div>
     </div>
@@ -448,24 +448,24 @@
     <div class="shell">
         <h2>Hva dekker datakildene?</h2>
         <p class="section-lead">
-            Daglig oppdatert data, normalisert og strukturert for agenter. Ingen scraping,
-            ingen rate-limit-overraskelser — alt eksponeres med stabile schemas.
+            Daglig oppdatert data, normalisert og strukturert for agenter. Ingen skraping,
+            ingen overraskelser med kall-grenser — alt eksponeres med stabile skjemaer.
         </p>
         <div class="stats">
             <div class="stat"><span class="stat-num">2,1M</span><div class="stat-label">norske enheter (BRREG)</div></div>
             <div class="stat"><span class="stat-num">100%</span><div class="stat-label">eierregister-dekning (AS)</div></div>
-            <div class="stat"><span class="stat-num">17</span><div class="stat-label">tools, sync schemas</div></div>
-            <div class="stat"><span class="stat-num">Daglig</span><div class="stat-label">BRREG-refresh</div></div>
+            <div class="stat"><span class="stat-num">17</span><div class="stat-label">verktøy, synkroniserte skjemaer</div></div>
+            <div class="stat"><span class="stat-num">Daglig</span><div class="stat-label">BRREG-oppdatering</div></div>
         </div>
     </div>
 </section>
 
-<section id="tools">
+<section id="verktoy">
     <div class="shell">
-        <h2>Tool-katalog</h2>
+        <h2>Verktøykatalog</h2>
         <p class="section-lead">
-            17 tools, gruppert etter use case. Alle returnerer normaliserte JSON-objekter med
-            kildehenvisning + freshness-timestamp. Full schema-dokumentasjon på
+            17 verktøy, gruppert etter bruksområde. Alle returnerer normaliserte JSON-objekter
+            med kildehenvisning og ferskhets-stempel. Full skjema-dokumentasjon på
             <a href="https://firmaradar.no/dokumentasjon">firmaradar.no/dokumentasjon</a>.
         </p>
         <div class="tool-groups">
@@ -485,22 +485,22 @@
             <div class="tool-group">
                 <h3><span class="ico">👤</span> Person</h3>
                 <ul class="tool-list">
-                    <li><code>search_persons</code> — fuzzy navne-søk</li>
-                    <li><code>get_person</code> — profil + fødselsår</li>
+                    <li><code>search_persons</code> — navne-søk med toleranse for skrivefeil</li>
+                    <li><code>get_person</code> — profil og fødselsår</li>
                     <li><code>get_person_companies</code> — eier- og rolle-koblinger</li>
-                    <li><code>get_person_roles</code> — aktive + historiske roller</li>
+                    <li><code>get_person_roles</code> — aktive og historiske roller</li>
                 </ul>
             </div>
             <div class="tool-group">
-                <h3><span class="ico">⚖️</span> KYC / AML</h3>
+                <h3><span class="ico">⚖️</span> KYC og AML</h3>
                 <ul class="tool-list">
-                    <li><code>check_aml_pep</code> — sanksjonslister + PEP + audit-trail</li>
+                    <li><code>check_aml_pep</code> — sanksjonslister, PEP og revisjonsspor</li>
                 </ul>
             </div>
             <div class="tool-group">
-                <h3><span class="ico">📈</span> Bransje + overvåkning</h3>
+                <h3><span class="ico">📈</span> Bransje og overvåkning</h3>
                 <ul class="tool-list">
-                    <li><code>list_companies_in_nace</code> — NACE + geografi-filter</li>
+                    <li><code>list_companies_in_nace</code> — NACE med geografi-filter</li>
                     <li><code>get_recent_changes</code> — endringer siste N dager</li>
                     <li><code>search_announcements</code> — fritekst-søk i kunngjøringer</li>
                     <li><code>compare_companies</code> — flere selskaper side om side</li>
@@ -510,36 +510,36 @@
     </div>
 </section>
 
-<section id="quickstart">
+<section id="kom-i-gang">
     <div class="shell">
         <h2>Kom i gang på 2 minutter</h2>
         <p class="section-lead">
-            To måter å koble til, avhengig av hvilken agent du bruker.
+            To måter å koble til på, avhengig av hvilken agent du bruker.
         </p>
         <div class="quickstart-tabs">
             <div class="qs-card">
                 <h3>🚀 OAuth (anbefalt)</h3>
-                <p class="qs-meta">For Claude Web, Claude Mobile, Claude Desktop, ChatGPT med MCP-støtte.</p>
-                <p>Bare lim inn denne URL-en som connector i klienten din:</p>
+                <p class="qs-meta">For Claude Web, Claude Mobile, Claude Desktop og ChatGPT med MCP-støtte.</p>
+                <p>Lim inn denne adressen som tilkobling i klienten din:</p>
                 <pre><code>https://mcp.firmaradar.no/mcp</code></pre>
-                <p>Du autentiserer via firmaradar.no-konto og velger hvilken API-nøkkel
-                agenten skal bruke. Ingen klient-side credentials nødvendig.</p>
+                <p>Du logger inn via firmaradar.no-konto og velger hvilken API-nøkkel
+                agenten skal bruke. Ingen legitimasjon trengs på klient-siden.</p>
                 <p class="qs-note">
-                    Detaljert klient-for-klient-veiledning:
+                    Detaljert veiledning per klient:
                     <a href="https://firmaradar.no/koble-til-agent" target="_blank" rel="noopener">firmaradar.no/koble-til-agent</a>
                 </p>
             </div>
             <div class="qs-card">
-                <h3>📦 API-key via stdio</h3>
-                <p class="qs-meta">For Cursor, Codex, eller andre klienter uten remote-MCP-støtte.</p>
-                <p>Installer pakken og legg til i klientens config-fil:</p>
+                <h3>📦 API-nøkkel via stdio</h3>
+                <p class="qs-meta">For Cursor, Codex eller andre klienter uten støtte for ekstern MCP.</p>
+                <p>Installer pakken og legg til i klientens konfigurasjonsfil:</p>
                 <pre><code>pip install firmaradar-mcp</code></pre>
                 <pre><code>{
   "mcpServers": {
     "firmaradar": {
       "command": "firmaradar-mcp",
       "env": {
-        "FIRMARADAR_API_KEY": "din-key",
+        "FIRMARADAR_API_KEY": "din-nøkkel",
         "FIRMARADAR_API_BASE": "https://firmaradar.no"
       }
     }
@@ -556,24 +556,24 @@
 
 <section>
     <div class="shell">
-        <h2>Hvorfor open source?</h2>
+        <h2>Hvorfor åpen kildekode?</h2>
         <p class="section-lead">
-            Server-pakken (denne) er Apache 2.0. Du kan lese, audit-e og forke den fritt.
-            Selve datakilden (firmaradar.no) er proprietær fordi den eier data-pipelinen
-            og lisensieringen mot Skatteetaten / Brønnøysund.
+            Server-pakken (denne) er Apache 2.0. Du kan lese, gå gjennom og forke den fritt.
+            Selve datakilden (firmaradar.no) er proprietær fordi den eier dataflyten
+            og lisensieringen mot Skatteetaten og Brønnøysund.
         </p>
         <div class="why-grid">
             <div class="why-card">
                 <h3>🔍 Transparens</h3>
-                <p>Hvert tool-stub ligger åpent. Du kan se nøyaktig hva agenten sender til Firmaradar — ingen skjulte felter.</p>
+                <p>Hver verktøy-modul ligger åpent. Du kan se nøyaktig hva agenten sender til Firmaradar — ingen skjulte felter.</p>
             </div>
             <div class="why-card">
-                <h3>🔒 Trust gjennom audit</h3>
-                <p>Pin en spesifikk versjon, kjør din egen SBOM-skanning, eller forka og kjør på din egen infrastruktur.</p>
+                <h3>🔒 Tillit gjennom gjennomgang</h3>
+                <p>Lås til en spesifikk versjon, kjør din egen SBOM-skanning, eller fork-en og kjør på din egen infrastruktur.</p>
             </div>
             <div class="why-card">
-                <h3>🤝 PR-er velkommen</h3>
-                <p>Forbedringer i schemas eller kompatibilitets-shims for nye agent-klienter tar vi gladelig imot.</p>
+                <h3>🤝 Bidrag velkommen</h3>
+                <p>Forbedringer i skjemaer eller kompatibilitets-lag for nye agent-klienter tar vi gladelig imot.</p>
             </div>
         </div>
     </div>
@@ -581,16 +581,16 @@
 
 <section>
     <div class="shell">
-        <h2>Sikkerhet + GDPR</h2>
+        <h2>Sikkerhet og GDPR</h2>
         <p class="section-lead">
-            Bygd for produksjons-bruk i regulerte bransjer (advokat, KYC, revisjon, finans).
+            Bygget for produksjons-bruk i regulerte bransjer (advokat, KYC, revisjon, finans).
         </p>
         <ul class="sec-list">
-            <li>OAuth 2.0 + PKCE (RFC 7636), Dynamic Client Registration (RFC 7591), Protected Resource Metadata (RFC 9728)</li>
-            <li>Delegate-tokens i PG, koblet til kundens valgte API-nøkkel — uavhengig revoke-bar</li>
-            <li>Per-kall audit-logging (kunde + nøkkel + endpoint + status) — eksporteres via DSAR-rapport</li>
-            <li>Person-data pseudonymisert på serversiden; backuper kryptert + offsite</li>
-            <li>Norsk lov + GDPR-compliant: behandlingsgrunnlag, samtykke, retention-policy</li>
+            <li>OAuth 2.0 og PKCE (RFC 7636), Dynamic Client Registration (RFC 7591), Protected Resource Metadata (RFC 9728)</li>
+            <li>Delegerte tokens i PostgreSQL, knyttet til kundens valgte API-nøkkel — kan tilbakekalles uavhengig</li>
+            <li>Loggføring per kall (kunde, nøkkel, endepunkt og status) — eksporteres via DSAR-rapport</li>
+            <li>Person-data pseudonymisert på serversiden; sikkerhetskopier kryptert og lagret eksternt</li>
+            <li>Norsk lov og GDPR-tilpasset: behandlingsgrunnlag, samtykke, oppbevaringstid</li>
         </ul>
         <p style="margin-top: 18px;">
             Full sikkerhets-policy:
@@ -604,11 +604,11 @@
         <div class="cta-banner">
             <h2>Klar til å koble til?</h2>
             <p>
-                99 kr/mnd platform-fee + per-kall-prising. Egen rabattert MCP-pakke for agent-volum.
+                99 kr/mnd i plattformavgift, deretter per-kall-pris. Egen rabattert MCP-pakke for agent-volum.
             </p>
             <div class="cta-row" style="margin-bottom: 0;">
                 <a class="btn btn-fill" href="https://firmaradar.no/koble-til-agent" target="_blank" rel="noopener">
-                    Start gratis →
+                    Kom i gang →
                 </a>
                 <a class="btn btn-outline" href="https://firmaradar.no/prising" target="_blank" rel="noopener">
                     Se prising
@@ -620,14 +620,14 @@
 
 <footer class="site-footer">
     <div class="shell">
-        <span class="footer-brand">Bygd av Firmaradar AS</span>
+        <span class="footer-brand">Bygget av Firmaradar AS</span>
         <a href="https://firmaradar.no/" target="_blank" rel="noopener">firmaradar.no</a> ·
         <a href="https://firmaradar.no/prising" target="_blank" rel="noopener">Prising</a> ·
         <a href="https://firmaradar.no/dokumentasjon" target="_blank" rel="noopener">Dokumentasjon</a> ·
         <a href="https://firmaradar.no/personvern" target="_blank" rel="noopener">Personvern</a> ·
         <a href="https://github.com/Tiwas/firmaradar-mcp" target="_blank" rel="noopener">GitHub</a>
         <p style="margin-top: 14px; font-size: 0.82rem;">
-            Apache 2.0 · Data fra Brønnøysundregistrene + Skatteetaten · Daglig oppdatert
+            Apache 2.0 · Data fra Brønnøysundregistrene og Skatteetaten · Daglig oppdatert
         </p>
     </div>
 </footer>
