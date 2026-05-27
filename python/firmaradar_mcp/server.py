@@ -33,7 +33,7 @@ _LOG = logging.getLogger("firmaradar_mcp.server")
 # Holdes stabilt på tvers av versjoner så bruker ikke får "ny server"-prompt
 # ved hver oppgradering.
 _SERVER_NAME = "firmaradar-mcp"
-_SERVER_VERSION = "0.3.0"
+_SERVER_VERSION = "0.3.1"
 
 
 def _configure_logging() -> None:
@@ -193,7 +193,54 @@ async def _amain() -> int:
     return 0
 
 
+_HELP_TEXT = f"""\
+firmaradar-mcp v{_SERVER_VERSION} — Norwegian company-intelligence MCP server
+
+Usage:
+  firmaradar-mcp              Run the stdio MCP server (default).
+                              Waits for an MCP client to connect via stdin/stdout.
+  firmaradar-mcp --help, -h   Show this help and exit.
+  firmaradar-mcp --version    Show version and exit.
+
+Environment variables:
+  FIRMARADAR_API_KEY          (required) Your Firmaradar API key.
+                              Get one at https://firmaradar.no/min-side/api-keys
+  FIRMARADAR_BASE_URL         (optional) Override backend URL.
+                              Default: https://firmaradar.no
+  FIRMARADAR_MCP_LOG_LEVEL    (optional) DEBUG | INFO | WARNING | ERROR.
+                              Default: INFO. Logs go to stderr.
+
+Typical use:
+  Add this server to your agent client config (Claude Desktop, Cursor, etc.).
+  Example for Claude Desktop (claude_desktop_config.json):
+
+    {{
+      "mcpServers": {{
+        "firmaradar": {{
+          "command": "firmaradar-mcp",
+          "env": {{ "FIRMARADAR_API_KEY": "your-key-here" }}
+        }}
+      }}
+    }}
+
+Documentation: https://firmaradar.no/agentisk-flyt
+Tool catalog:  https://firmaradar.no/api-dokumentasjon
+"""
+
+
 def main() -> int:
+    # Handle --help / --version BEFORE we try to construct the client,
+    # so the user can discover the env-var requirement without first
+    # setting it. Previously the client was instantiated unconditionally
+    # in _amain() which crashed --help on missing FIRMARADAR_API_KEY.
+    argv = sys.argv[1:]
+    if argv and argv[0] in {"-h", "--help"}:
+        print(_HELP_TEXT)
+        return 0
+    if argv and argv[0] in {"--version", "-V"}:
+        print(f"firmaradar-mcp {_SERVER_VERSION}")
+        return 0
+
     try:
         return asyncio.run(_amain())
     except KeyboardInterrupt:

@@ -11,6 +11,24 @@ workflow-nodene på samme funksjonalitets-baseline.
 
 ---
 
+## [0.3.1] — 2026-05-27
+
+### Fixed
+
+- **`firmaradar-mcp --help` and `--version` now work without
+  `FIRMARADAR_API_KEY` set.** Previously these flags crashed with
+  `ValueError: Missing required environment variable FIRMARADAR_API_KEY`
+  because the client was instantiated unconditionally before argparse
+  ran. Now we short-circuit on `-h`/`--help`/`--version`/`-V` before
+  any client construction.
+
+### Added
+
+- `_HELP_TEXT` constant with usage examples for Claude Desktop config,
+  env-var documentation, and links to firmaradar.no docs.
+
+---
+
 ## [0.3.0] — 2026-05-27
 
 Første offentlige release på PyPI. Eksponerer 17 read-only MCP-verktøy
