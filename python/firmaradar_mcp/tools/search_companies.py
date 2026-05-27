@@ -195,7 +195,7 @@ async def handle(
 
 
 HANDLER = ToolHandler(
-    name="firmaradar.search_companies",
+    name="firmaradar_search_companies",
     description=(
         "Search Norwegian companies with filters (name, NACE, location, status, "
         "size, founding date). Returns paginated list of candidate orgnr to "

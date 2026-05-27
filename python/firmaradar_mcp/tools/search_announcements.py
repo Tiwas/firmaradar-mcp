@@ -117,7 +117,7 @@ async def handle(
 
 
 HANDLER = ToolHandler(
-    name="firmaradar.search_announcements",
+    name="firmaradar_search_announcements",
     description=(
         "Search BRREG kunngjøringer across all Norwegian companies — filter "
         "by type (konkurs, fusjon, ...), date range, NACE-code, or location. "

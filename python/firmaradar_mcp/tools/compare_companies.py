@@ -144,7 +144,7 @@ async def handle(
 
 
 HANDLER = ToolHandler(
-    name="firmaradar.compare_companies",
+    name="firmaradar_compare_companies",
     description=(
         "Compare key financial metrics of up to 5 Norwegian companies "
         "side-by-side across the last N years (default 5). Use for "

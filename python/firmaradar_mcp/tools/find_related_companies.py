@@ -92,7 +92,7 @@ async def handle(
 
 
 HANDLER = ToolHandler(
-    name="firmaradar.find_related_companies",
+    name="firmaradar_find_related_companies",
     description=(
         "Find companies related to the given orgnr via shared persons (board "
         "members/shareholders), shared registered address, or shared ultimate "

@@ -101,7 +101,7 @@ async def handle(
 
 
 HANDLER = ToolHandler(
-    name="firmaradar.search_persons",
+    name="firmaradar_search_persons",
     description=(
         "Search for Norwegian persons in the shareholder/role-holder dataset "
         "by name. PII-sensitive — requires the search_full_enabled tier. "

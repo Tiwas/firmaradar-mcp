@@ -71,7 +71,7 @@ async def handle(
 
 
 HANDLER = ToolHandler(
-    name="firmaradar.get_company_announcements",
+    name="firmaradar_get_company_announcements",
     description=(
         "List BRREG kunngjøringer (official announcements) for a Norwegian "
         "company: bankruptcy, mergers, demergers, ownership changes, address "

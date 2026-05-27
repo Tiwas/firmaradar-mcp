@@ -102,7 +102,7 @@ async def handle(
 
 
 HANDLER = ToolHandler(
-    name="firmaradar.get_company_ownership",
+    name="firmaradar_get_company_ownership",
     description=(
         "Get the ownership tree for a Norwegian company: who they own "
         "(direction=down), who owns them (direction=up / UBO), or both. "

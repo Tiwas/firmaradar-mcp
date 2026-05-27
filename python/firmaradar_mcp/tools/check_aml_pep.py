@@ -103,7 +103,7 @@ async def handle(
 
 
 HANDLER = ToolHandler(
-    name="firmaradar.check_aml_pep",
+    name="firmaradar_check_aml_pep",
     description=(
         "Screen a person's name against sanctions (OFAC, EU, UN) and PEP lists. "
         "Compliance-critical: PII-sensitive, requires a signed DPA and a "

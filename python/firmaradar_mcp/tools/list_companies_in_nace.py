@@ -105,7 +105,7 @@ async def handle(
 
 
 HANDLER = ToolHandler(
-    name="firmaradar.list_companies_in_nace",
+    name="firmaradar_list_companies_in_nace",
     description=(
         "List Norwegian companies in a specific NACE industry code (or code "
         "prefix), optionally filtered by status, kommune and size. Useful for "

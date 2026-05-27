@@ -96,7 +96,7 @@ async def handle(
 
 
 HANDLER = ToolHandler(
-    name="firmaradar.get_company_roles",
+    name="firmaradar_get_company_roles",
     description=(
         "List board members, daglig leder, signature holders, prokura and "
         "revisor for a Norwegian company. Set include_historic=true for "

@@ -114,7 +114,7 @@ async def handle(
 
 
 HANDLER = ToolHandler(
-    name="firmaradar.get_recent_changes",
+    name="firmaradar_get_recent_changes",
     description=(
         "List changes (kunngjøringer for companies; role + ownership "
         "movements for persons) in the last N days. Use when monitoring a "

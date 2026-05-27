@@ -1,0 +1,636 @@
+<!DOCTYPE html>
+<html lang="no">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Firmaradar MCP — agentisk tilgang til norske selskapsdata</title>
+    <meta name="description" content="Slå opp norske selskaper, eierstrukturer, konsernhierarkier og roller direkte fra Claude, ChatGPT, Cursor, Codex, Gemini og andre MCP-kompatible agenter.">
+    <meta name="robots" content="index, follow">
+
+    <!-- Open Graph -->
+    <meta property="og:type" content="website">
+    <meta property="og:title" content="Firmaradar MCP — agentisk tilgang til norske selskapsdata">
+    <meta property="og:description" content="Koble Claude, ChatGPT, Cursor og andre AI-agenter direkte til 2,1M norske selskaper, eierregisteret, konsern, roller, regnskap og AML.">
+    <meta property="og:url" content="https://tiwas.github.io/firmaradar-mcp/">
+    <meta property="og:image" content="https://firmaradar.no/static/img/logo_nobg.png">
+    <meta property="og:site_name" content="Firmaradar">
+
+    <!-- Twitter card -->
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="Firmaradar MCP">
+    <meta name="twitter:description" content="Norske selskapsdata for AI-agenter. OAuth 2.0 + DCR. Apache 2.0.">
+    <meta name="twitter:image" content="https://firmaradar.no/static/img/logo_nobg.png">
+
+    <link rel="icon" type="image/png" href="https://firmaradar.no/static/img/logo_nobg.png">
+    <link rel="canonical" href="https://tiwas.github.io/firmaradar-mcp/">
+
+    <style>
+        :root {
+            --brand: #4f46e5;
+            --brand-strong: #4338ca;
+            --brand-50: #eef2ff;
+            --brand-dark: #1e1b4b;
+            --text: #0f172a;
+            --muted: #64748b;
+            --line: #e2e8f0;
+            --soft-bg: #f8fafc;
+            --bg: #ffffff;
+            --success: #10b981;
+            --warning: #f59e0b;
+            --code-bg: #0f172a;
+            --code-text: #e2e8f0;
+        }
+        * { box-sizing: border-box; }
+        html, body { margin: 0; padding: 0; }
+        html {
+            min-height: 100vh;
+            background:
+                radial-gradient(circle at top center, rgba(219, 234, 254, 0.72), transparent 28%),
+                linear-gradient(180deg, var(--bg) 0%, var(--bg) 100%);
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+            color: var(--text);
+            line-height: 1.55;
+            -webkit-font-smoothing: antialiased;
+        }
+        a { color: var(--brand); text-decoration: none; }
+        a:hover { text-decoration: underline; }
+        .shell {
+            max-width: 1080px;
+            margin: 0 auto;
+            padding: 0 24px;
+        }
+
+        /* ── Header ── */
+        header.site-header {
+            padding: 18px 0;
+            border-bottom: 1px solid var(--line);
+            background: rgba(255, 255, 255, 0.92);
+            backdrop-filter: blur(10px);
+            position: sticky;
+            top: 0;
+            z-index: 30;
+        }
+        .header-inner {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 16px;
+            flex-wrap: wrap;
+        }
+        .brand {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            color: var(--brand-dark);
+            font-weight: 700;
+            font-size: 1.05rem;
+        }
+        .brand img { height: 36px; width: auto; display: block; }
+        .header-nav {
+            display: flex;
+            align-items: center;
+            gap: 22px;
+            font-size: 0.92rem;
+        }
+        .header-nav a { color: var(--text); font-weight: 500; }
+        .header-nav .btn-primary {
+            background: var(--brand);
+            color: #fff !important;
+            padding: 8px 16px;
+            border-radius: 8px;
+            font-weight: 600;
+        }
+        .header-nav .btn-primary:hover { background: var(--brand-strong); text-decoration: none; }
+
+        /* ── Hero ── */
+        .hero {
+            padding: 72px 0 56px;
+            text-align: center;
+        }
+        .eyebrow {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 4px 12px;
+            background: var(--brand-50);
+            color: var(--brand-strong);
+            border-radius: 999px;
+            font-size: 0.78rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.06em;
+            margin-bottom: 18px;
+        }
+        h1 {
+            font-size: clamp(2rem, 5vw, 3rem);
+            line-height: 1.15;
+            margin: 0 0 18px;
+            color: var(--brand-dark);
+            letter-spacing: -0.02em;
+        }
+        h1 .accent { color: var(--brand); }
+        .hero-lead {
+            font-size: 1.15rem;
+            color: var(--muted);
+            max-width: 680px;
+            margin: 0 auto 28px;
+        }
+        .cta-row {
+            display: flex;
+            justify-content: center;
+            gap: 12px;
+            flex-wrap: wrap;
+            margin-bottom: 18px;
+        }
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 12px 22px;
+            border-radius: 10px;
+            font-weight: 600;
+            font-size: 0.98rem;
+            text-decoration: none;
+            border: 1px solid transparent;
+            transition: transform 0.06s, background 0.15s, border-color 0.15s;
+        }
+        .btn:hover { text-decoration: none; transform: translateY(-1px); }
+        .btn-fill {
+            background: var(--brand);
+            color: #fff;
+        }
+        .btn-fill:hover { background: var(--brand-strong); color: #fff; }
+        .btn-outline {
+            background: #fff;
+            color: var(--text);
+            border-color: var(--line);
+        }
+        .btn-outline:hover { border-color: var(--brand); color: var(--brand); }
+        .badges {
+            display: flex;
+            justify-content: center;
+            gap: 8px;
+            flex-wrap: wrap;
+            margin-top: 8px;
+        }
+        .badges img { height: 22px; }
+
+        /* ── Sections ── */
+        section { padding: 56px 0; border-top: 1px solid var(--line); }
+        section h2 {
+            font-size: 1.7rem;
+            color: var(--brand-dark);
+            margin: 0 0 14px;
+            letter-spacing: -0.01em;
+        }
+        section h2 + p.section-lead {
+            color: var(--muted);
+            font-size: 1.02rem;
+            margin: 0 0 28px;
+            max-width: 720px;
+        }
+
+        /* ── Data-stats grid ── */
+        .stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: 16px;
+            margin-top: 8px;
+        }
+        .stat {
+            background: #fff;
+            border: 1px solid var(--line);
+            border-radius: 12px;
+            padding: 18px 20px;
+        }
+        .stat-num {
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: var(--brand-dark);
+            display: block;
+        }
+        .stat-label {
+            font-size: 0.88rem;
+            color: var(--muted);
+            margin-top: 2px;
+        }
+
+        /* ── Tool catalogue ── */
+        .tool-groups {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 18px;
+            margin-top: 24px;
+        }
+        .tool-group {
+            background: #fff;
+            border: 1px solid var(--line);
+            border-radius: 12px;
+            padding: 22px;
+        }
+        .tool-group h3 {
+            font-size: 1.05rem;
+            margin: 0 0 14px;
+            color: var(--brand-dark);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .tool-group h3 .ico {
+            width: 28px;
+            height: 28px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            background: var(--brand-50);
+            color: var(--brand);
+            border-radius: 7px;
+            font-size: 0.95rem;
+        }
+        .tool-list {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+        }
+        .tool-list li {
+            padding: 8px 0;
+            border-bottom: 1px dashed var(--line);
+            font-size: 0.92rem;
+        }
+        .tool-list li:last-child { border-bottom: none; }
+        .tool-list code {
+            background: var(--brand-50);
+            color: var(--brand-strong);
+            padding: 1px 6px;
+            border-radius: 5px;
+            font-size: 0.85em;
+        }
+
+        /* ── Quick-start ── */
+        .quickstart-tabs {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+            gap: 22px;
+            margin-top: 28px;
+        }
+        .qs-card {
+            background: #fff;
+            border: 1px solid var(--line);
+            border-radius: 12px;
+            padding: 24px;
+        }
+        .qs-card h3 {
+            font-size: 1.1rem;
+            margin: 0 0 6px;
+            color: var(--brand-dark);
+        }
+        .qs-card .qs-meta {
+            font-size: 0.84rem;
+            color: var(--muted);
+            margin-bottom: 14px;
+        }
+        .qs-card pre {
+            background: var(--code-bg);
+            color: var(--code-text);
+            padding: 16px;
+            border-radius: 10px;
+            font-size: 0.85rem;
+            overflow-x: auto;
+            margin: 14px 0;
+        }
+        .qs-card code { font-family: 'SF Mono', Monaco, 'Cascadia Mono', 'Roboto Mono', monospace; }
+        .qs-card .qs-note {
+            font-size: 0.86rem;
+            color: var(--muted);
+            margin-top: 8px;
+        }
+        .qs-card .qs-note a { font-weight: 600; }
+
+        /* ── Why open source ── */
+        .why-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+            gap: 18px;
+            margin-top: 24px;
+        }
+        .why-card {
+            padding: 22px;
+            background: #fff;
+            border: 1px solid var(--line);
+            border-radius: 12px;
+        }
+        .why-card h3 {
+            font-size: 1rem;
+            margin: 0 0 8px;
+            color: var(--brand-dark);
+        }
+        .why-card p {
+            font-size: 0.92rem;
+            color: var(--muted);
+            margin: 0;
+        }
+
+        /* ── Security ── */
+        .sec-list {
+            list-style: none;
+            padding: 0;
+            margin: 18px 0 0;
+        }
+        .sec-list li {
+            padding: 10px 0;
+            font-size: 0.96rem;
+            display: flex;
+            align-items: flex-start;
+            gap: 10px;
+        }
+        .sec-list li::before {
+            content: '✓';
+            color: var(--success);
+            font-weight: 700;
+            flex-shrink: 0;
+        }
+
+        /* ── CTA banner ── */
+        .cta-banner {
+            margin: 56px 0 0;
+            padding: 36px 40px;
+            background: linear-gradient(135deg, var(--brand) 0%, var(--brand-strong) 100%);
+            color: #fff;
+            border-radius: 16px;
+            text-align: center;
+        }
+        .cta-banner h2 {
+            color: #fff;
+            margin: 0 0 8px;
+        }
+        .cta-banner p {
+            color: rgba(255, 255, 255, 0.85);
+            margin: 0 0 18px;
+            font-size: 1.02rem;
+        }
+        .cta-banner .btn-fill {
+            background: #fff;
+            color: var(--brand-strong) !important;
+        }
+        .cta-banner .btn-fill:hover { background: #f1f5f9; }
+        .cta-banner .btn-outline {
+            background: transparent;
+            color: #fff !important;
+            border-color: rgba(255, 255, 255, 0.5);
+        }
+        .cta-banner .btn-outline:hover { border-color: #fff; }
+
+        /* ── Footer ── */
+        footer.site-footer {
+            padding: 36px 0 48px;
+            border-top: 1px solid var(--line);
+            text-align: center;
+            color: var(--muted);
+            font-size: 0.88rem;
+            margin-top: 32px;
+        }
+        footer.site-footer a { color: var(--text); margin: 0 8px; }
+        footer.site-footer .footer-brand {
+            font-weight: 600;
+            color: var(--brand-dark);
+            margin-bottom: 8px;
+            display: block;
+        }
+    </style>
+</head>
+<body>
+
+<header class="site-header">
+    <div class="shell header-inner">
+        <a class="brand" href="https://firmaradar.no/">
+            <img src="https://firmaradar.no/static/img/logo_nobg.png" alt="Firmaradar">
+        </a>
+        <nav class="header-nav" aria-label="Hovedmeny">
+            <a href="#tools">Tools</a>
+            <a href="#quickstart">Kom i gang</a>
+            <a href="https://firmaradar.no/prising" target="_blank" rel="noopener">Prising</a>
+            <a href="https://github.com/Tiwas/firmaradar-mcp" target="_blank" rel="noopener">GitHub</a>
+            <a href="https://firmaradar.no/koble-til-agent" class="btn-primary" target="_blank" rel="noopener">Koble til</a>
+        </nav>
+    </div>
+</header>
+
+<section class="hero">
+    <div class="shell">
+        <div class="eyebrow">🔌 Model Context Protocol (MCP)</div>
+        <h1>Norske selskapsdata <span class="accent">for AI-agentene dine</span></h1>
+        <p class="hero-lead">
+            Koble Claude, ChatGPT, Cursor, Codex og Gemini direkte til 2,1 millioner norske
+            enheter, Aksjeeierregisteret, roller, regnskap, kunngjøringer og AML/PEP-screening
+            — gjennom én standardisert MCP-server med OAuth 2.0 + DCR.
+        </p>
+        <div class="cta-row">
+            <a class="btn btn-fill" href="https://firmaradar.no/koble-til-agent" target="_blank" rel="noopener">
+                Koble til agenten din →
+            </a>
+            <a class="btn btn-outline" href="#quickstart">Se quick-start</a>
+            <a class="btn btn-outline" href="https://github.com/Tiwas/firmaradar-mcp" target="_blank" rel="noopener">
+                ⭐ GitHub
+            </a>
+        </div>
+        <div class="badges">
+            <img src="https://img.shields.io/badge/License-Apache_2.0-blue.svg" alt="Apache 2.0">
+            <img src="https://img.shields.io/badge/MCP-compatible-success.svg" alt="MCP compatible">
+            <img src="https://img.shields.io/badge/OAuth_2.0-+_DCR-orange.svg" alt="OAuth 2.0 + DCR">
+            <img src="https://img.shields.io/badge/data-norske%20selskaper-9333ea.svg" alt="Norske selskaper">
+        </div>
+    </div>
+</section>
+
+<section>
+    <div class="shell">
+        <h2>Hva dekker datakildene?</h2>
+        <p class="section-lead">
+            Daglig oppdatert data, normalisert og strukturert for agenter. Ingen scraping,
+            ingen rate-limit-overraskelser — alt eksponeres med stabile schemas.
+        </p>
+        <div class="stats">
+            <div class="stat"><span class="stat-num">2,1M</span><div class="stat-label">norske enheter (BRREG)</div></div>
+            <div class="stat"><span class="stat-num">100%</span><div class="stat-label">eierregister-dekning (AS)</div></div>
+            <div class="stat"><span class="stat-num">17</span><div class="stat-label">tools, sync schemas</div></div>
+            <div class="stat"><span class="stat-num">Daglig</span><div class="stat-label">BRREG-refresh</div></div>
+        </div>
+    </div>
+</section>
+
+<section id="tools">
+    <div class="shell">
+        <h2>Tool-katalog</h2>
+        <p class="section-lead">
+            17 tools, gruppert etter use case. Alle returnerer normaliserte JSON-objekter med
+            kildehenvisning + freshness-timestamp. Full schema-dokumentasjon på
+            <a href="https://firmaradar.no/dokumentasjon">firmaradar.no/dokumentasjon</a>.
+        </p>
+        <div class="tool-groups">
+            <div class="tool-group">
+                <h3><span class="ico">🏢</span> Selskap</h3>
+                <ul class="tool-list">
+                    <li><code>search_companies</code> — søk på navn / orgnr</li>
+                    <li><code>get_company</code> — full profil</li>
+                    <li><code>get_company_ownership</code> — konsernhierarki opp + ned</li>
+                    <li><code>get_company_roles</code> — styre, daglig leder, prokura</li>
+                    <li><code>get_company_financials</code> — årsregnskap + nøkkeltall</li>
+                    <li><code>get_company_announcements</code> — BRREG-kunngjøringer</li>
+                    <li><code>get_company_signals</code> — risiko + KYC-flagg</li>
+                    <li><code>find_related_companies</code> — via eier, rolle, adresse</li>
+                </ul>
+            </div>
+            <div class="tool-group">
+                <h3><span class="ico">👤</span> Person</h3>
+                <ul class="tool-list">
+                    <li><code>search_persons</code> — fuzzy navne-søk</li>
+                    <li><code>get_person</code> — profil + fødselsår</li>
+                    <li><code>get_person_companies</code> — eier- og rolle-koblinger</li>
+                    <li><code>get_person_roles</code> — aktive + historiske roller</li>
+                </ul>
+            </div>
+            <div class="tool-group">
+                <h3><span class="ico">⚖️</span> KYC / AML</h3>
+                <ul class="tool-list">
+                    <li><code>check_aml_pep</code> — sanksjonslister + PEP + audit-trail</li>
+                </ul>
+            </div>
+            <div class="tool-group">
+                <h3><span class="ico">📈</span> Bransje + overvåkning</h3>
+                <ul class="tool-list">
+                    <li><code>list_companies_in_nace</code> — NACE + geografi-filter</li>
+                    <li><code>get_recent_changes</code> — endringer siste N dager</li>
+                    <li><code>search_announcements</code> — fritekst-søk i kunngjøringer</li>
+                    <li><code>compare_companies</code> — flere selskaper side om side</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+</section>
+
+<section id="quickstart">
+    <div class="shell">
+        <h2>Kom i gang på 2 minutter</h2>
+        <p class="section-lead">
+            To måter å koble til, avhengig av hvilken agent du bruker.
+        </p>
+        <div class="quickstart-tabs">
+            <div class="qs-card">
+                <h3>🚀 OAuth (anbefalt)</h3>
+                <p class="qs-meta">For Claude Web, Claude Mobile, Claude Desktop, ChatGPT med MCP-støtte.</p>
+                <p>Bare lim inn denne URL-en som connector i klienten din:</p>
+                <pre><code>https://mcp.firmaradar.no/mcp</code></pre>
+                <p>Du autentiserer via firmaradar.no-konto og velger hvilken API-nøkkel
+                agenten skal bruke. Ingen klient-side credentials nødvendig.</p>
+                <p class="qs-note">
+                    Detaljert klient-for-klient-veiledning:
+                    <a href="https://firmaradar.no/koble-til-agent" target="_blank" rel="noopener">firmaradar.no/koble-til-agent</a>
+                </p>
+            </div>
+            <div class="qs-card">
+                <h3>📦 API-key via stdio</h3>
+                <p class="qs-meta">For Cursor, Codex, eller andre klienter uten remote-MCP-støtte.</p>
+                <p>Installer pakken og legg til i klientens config-fil:</p>
+                <pre><code>pip install firmaradar-mcp</code></pre>
+                <pre><code>{
+  "mcpServers": {
+    "firmaradar": {
+      "command": "firmaradar-mcp",
+      "env": {
+        "FIRMARADAR_API_KEY": "din-key",
+        "FIRMARADAR_API_BASE": "https://firmaradar.no"
+      }
+    }
+  }
+}</code></pre>
+                <p class="qs-note">
+                    Hent API-nøkkel:
+                    <a href="https://firmaradar.no/min-side/api-keys" target="_blank" rel="noopener">firmaradar.no/min-side/api-keys</a>
+                </p>
+            </div>
+        </div>
+    </div>
+</section>
+
+<section>
+    <div class="shell">
+        <h2>Hvorfor open source?</h2>
+        <p class="section-lead">
+            Server-pakken (denne) er Apache 2.0. Du kan lese, audit-e og forke den fritt.
+            Selve datakilden (firmaradar.no) er proprietær fordi den eier data-pipelinen
+            og lisensieringen mot Skatteetaten / Brønnøysund.
+        </p>
+        <div class="why-grid">
+            <div class="why-card">
+                <h3>🔍 Transparens</h3>
+                <p>Hvert tool-stub ligger åpent. Du kan se nøyaktig hva agenten sender til Firmaradar — ingen skjulte felter.</p>
+            </div>
+            <div class="why-card">
+                <h3>🔒 Trust gjennom audit</h3>
+                <p>Pin en spesifikk versjon, kjør din egen SBOM-skanning, eller forka og kjør på din egen infrastruktur.</p>
+            </div>
+            <div class="why-card">
+                <h3>🤝 PR-er velkommen</h3>
+                <p>Forbedringer i schemas eller kompatibilitets-shims for nye agent-klienter tar vi gladelig imot.</p>
+            </div>
+        </div>
+    </div>
+</section>
+
+<section>
+    <div class="shell">
+        <h2>Sikkerhet + GDPR</h2>
+        <p class="section-lead">
+            Bygd for produksjons-bruk i regulerte bransjer (advokat, KYC, revisjon, finans).
+        </p>
+        <ul class="sec-list">
+            <li>OAuth 2.0 + PKCE (RFC 7636), Dynamic Client Registration (RFC 7591), Protected Resource Metadata (RFC 9728)</li>
+            <li>Delegate-tokens i PG, koblet til kundens valgte API-nøkkel — uavhengig revoke-bar</li>
+            <li>Per-kall audit-logging (kunde + nøkkel + endpoint + status) — eksporteres via DSAR-rapport</li>
+            <li>Person-data pseudonymisert på serversiden; backuper kryptert + offsite</li>
+            <li>Norsk lov + GDPR-compliant: behandlingsgrunnlag, samtykke, retention-policy</li>
+        </ul>
+        <p style="margin-top: 18px;">
+            Full sikkerhets-policy:
+            <a href="https://firmaradar.no/personvern" target="_blank" rel="noopener">firmaradar.no/personvern</a>
+        </p>
+    </div>
+</section>
+
+<section>
+    <div class="shell">
+        <div class="cta-banner">
+            <h2>Klar til å koble til?</h2>
+            <p>
+                99 kr/mnd platform-fee + per-kall-prising. Egen rabattert MCP-pakke for agent-volum.
+            </p>
+            <div class="cta-row" style="margin-bottom: 0;">
+                <a class="btn btn-fill" href="https://firmaradar.no/koble-til-agent" target="_blank" rel="noopener">
+                    Start gratis →
+                </a>
+                <a class="btn btn-outline" href="https://firmaradar.no/prising" target="_blank" rel="noopener">
+                    Se prising
+                </a>
+            </div>
+        </div>
+    </div>
+</section>
+
+<footer class="site-footer">
+    <div class="shell">
+        <span class="footer-brand">Bygd av Firmaradar AS</span>
+        <a href="https://firmaradar.no/" target="_blank" rel="noopener">firmaradar.no</a> ·
+        <a href="https://firmaradar.no/prising" target="_blank" rel="noopener">Prising</a> ·
+        <a href="https://firmaradar.no/dokumentasjon" target="_blank" rel="noopener">Dokumentasjon</a> ·
+        <a href="https://firmaradar.no/personvern" target="_blank" rel="noopener">Personvern</a> ·
+        <a href="https://github.com/Tiwas/firmaradar-mcp" target="_blank" rel="noopener">GitHub</a>
+        <p style="margin-top: 14px; font-size: 0.82rem;">
+            Apache 2.0 · Data fra Brønnøysundregistrene + Skatteetaten · Daglig oppdatert
+        </p>
+    </div>
+</footer>
+
+</body>
+</html>

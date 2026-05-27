@@ -29,27 +29,27 @@ from firmaradar_mcp.tools import ALL_TOOLS
 
 EXPECTED_TOOL_NAMES = {
     # Selskap (6)
-    "firmaradar.search_companies",
-    "firmaradar.get_company",
-    "firmaradar.get_company_ownership",
-    "firmaradar.get_company_roles",
-    "firmaradar.get_company_financials",
-    "firmaradar.get_company_announcements",
+    "firmaradar_search_companies",
+    "firmaradar_get_company",
+    "firmaradar_get_company_ownership",
+    "firmaradar_get_company_roles",
+    "firmaradar_get_company_financials",
+    "firmaradar_get_company_announcements",
     # Person (4)
-    "firmaradar.search_persons",
-    "firmaradar.get_person",
-    "firmaradar.get_person_roles",
-    "firmaradar.get_person_companies",
+    "firmaradar_search_persons",
+    "firmaradar_get_person",
+    "firmaradar_get_person_roles",
+    "firmaradar_get_person_companies",
     # Risikosignaler (3)
-    "firmaradar.get_company_signals",
-    "firmaradar.check_aml_pep",
-    "firmaradar.get_recent_changes",
+    "firmaradar_get_company_signals",
+    "firmaradar_check_aml_pep",
+    "firmaradar_get_recent_changes",
     # Bransje/relasjon (3)
-    "firmaradar.list_companies_in_nace",
-    "firmaradar.find_related_companies",
-    "firmaradar.compare_companies",
+    "firmaradar_list_companies_in_nace",
+    "firmaradar_find_related_companies",
+    "firmaradar_compare_companies",
     # Tverr-søk (1)
-    "firmaradar.search_announcements",
+    "firmaradar_search_announcements",
 }
 
 
@@ -70,10 +70,10 @@ def test_every_tool_has_description_and_schemas() -> None:
 # 4 tools er bevisst utsatt til v0.2 — disse skal raise
 # NotImplementedError med en hjelpende workaround-melding.
 DEFERRED_TOOL_NAMES = {
-    "firmaradar.check_aml_pep",
-    "firmaradar.get_company_signals",
-    "firmaradar.find_related_companies",
-    "firmaradar.search_announcements",
+    "firmaradar_check_aml_pep",
+    "firmaradar_get_company_signals",
+    "firmaradar_find_related_companies",
+    "firmaradar_search_announcements",
 }
 
 

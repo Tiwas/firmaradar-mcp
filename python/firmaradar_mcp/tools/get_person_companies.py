@@ -69,7 +69,7 @@ async def handle(
 
 
 HANDLER = ToolHandler(
-    name="firmaradar.get_person_companies",
+    name="firmaradar_get_person_companies",
     description=(
         "List all Norwegian companies where the given person holds shares. "
         "Use when the user asks 'what does Person A own?' Pass the "

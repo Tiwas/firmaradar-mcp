@@ -1,106 +1,70 @@
-# firmaradar-mcp
+<div align="center">
 
-[![License: Apache 2.0](https://img.shields.io/badge/license-Apache_2.0-blue.svg)](LICENSE)
-[![Python: 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](python/pyproject.toml)
-[![MCP](https://img.shields.io/badge/protocol-MCP_1.0-green.svg)](https://modelcontextprotocol.io)
+<img src="https://firmaradar.no/static/img/logo_nobg.png" alt="Firmaradar" width="220">
 
-**MCP stdio-server som eksponerer [Firmaradar.no](https://firmaradar.no)
-sin REST-API til AI-agenter (Claude, Cursor, OpenAI Codex, Gemini CLI,
-m.fl.) via Model Context Protocol.**
+# Firmaradar MCP Server
 
-Med denne pakken kan agenten din slå opp norske selskaper, eierstruktur,
-regnskap, kunngjøringer, risikosignaler og AML/PEP-status direkte i
-chatten — uten å skrive REST-kall manuelt.
+**Slå opp norske selskaper, eierstrukturer, konsernhierarkier og roller direkte fra Claude, ChatGPT, Cursor, Codex, Gemini og andre MCP-kompatible agenter.**
+
+[![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
+[![MCP](https://img.shields.io/badge/MCP-compatible-success.svg)](https://modelcontextprotocol.io)
+[![Norsk data](https://img.shields.io/badge/data-norske%20selskaper-orange.svg)](https://firmaradar.no)
+
+[**Koble til (anbefalt) →**](https://firmaradar.no/koble-til-agent) &nbsp;·&nbsp;
+[Tool-katalog](#tool-katalog) &nbsp;·&nbsp;
+[Quick-start](#quick-start) &nbsp;·&nbsp;
+[Prising](https://firmaradar.no/prising) &nbsp;·&nbsp;
+[Dokumentasjon](https://firmaradar.no/dokumentasjon)
+
+</div>
 
 ---
 
-## Hvordan det fungerer
+## Hva er dette?
+
+Firmaradar er Norges agentiske infrastruktur for selskapsdata. Denne MCP-serveren gir AI-agenten din direkte tilgang til:
+
+- **2,1 millioner norske enheter** (BRREG-baseregister, oppdatert daglig)
+- **Aksjeeierregisteret** fra Skatteetaten (eierandeler ned til person-nivå, opp gjennom hele konsernet)
+- **Roller** (styre, daglig leder, prokura) med historikk
+- **Regnskap** (årsregnskap, mellombalanser, signaler)
+- **Kunngjøringer** fra Brønnøysund + KYC-flagg
+- **AML/PEP-screening** med audit-trail
+- **NACE-bransjeovervåkning** (varsling ved nystiftet selskap i bransje + geografi)
+
+Bygd for produksjon: OAuth 2.0 + DCR (Claude Mobile + Web støttes), API-key-fallback (Cursor + Codex), [audit-logget per kall](https://firmaradar.no/dokumentasjon), [DSAR-eksport](https://firmaradar.no/dokumentasjon) og GDPR-pseudonymisering på serversiden.
+
+---
+
+## Quick-start
+
+### Anbefalt — OAuth (Claude Web, Claude Mobile, Claude Desktop)
+
+Bare lim inn server-URL i klienten din. Du autentiseres via firmaradar.no-konto og velger hvilken API-nøkkel agenten skal bruke.
 
 ```
-┌─────────────────┐   stdio    ┌──────────────────┐   HTTPS   ┌────────────────┐
-│ Agent-klient    │ ─────────► │ firmaradar-mcp   │ ────────► │ firmaradar.no  │
-│ (Claude, Cursor)│   MCP-JSON │ (denne pakken)   │   REST    │ /api/v1/*      │
-└─────────────────┘            └──────────────────┘           └────────────────┘
+https://mcp.firmaradar.no/mcp
 ```
 
-Agenten kaller `tools/list` for å se hva som er tilgjengelig (17 tools),
-deretter `tools/call` med strukturerte argumenter. MCP-serveren oversetter
-til REST-kall mot Firmaradar og returnerer strukturert JSON tilbake.
+Detaljert klient-for-klient-veiledning: **[firmaradar.no/koble-til-agent](https://firmaradar.no/koble-til-agent)**
 
----
+### Cursor / Codex / annet — API-key via stdio
 
-## Tilgjengelige tools (17)
-
-| Tool | Beskrivelse |
-|------|-------------|
-| `firmaradar.search_companies` | Strukturert søk i selskapsregisteret |
-| `firmaradar.get_company` | Full selskapsprofil |
-| `firmaradar.get_company_ownership` | Eierstruktur opp/ned/begge |
-| `firmaradar.get_company_roles` | Styreleder, daglig leder, signatur, prokura, revisor |
-| `firmaradar.get_company_financials` | Regnskap (inntil 20 år tilbake) |
-| `firmaradar.get_company_announcements` | BRREG-kunngjøringer |
-| `firmaradar.get_company_signals` | Risikosignal-aggregat |
-| `firmaradar.search_persons` | Person-søk |
-| `firmaradar.get_person` | Aggregert person-profil |
-| `firmaradar.get_person_roles` | Alle roller for én person |
-| `firmaradar.get_person_companies` | Alle selskap én person eier |
-| `firmaradar.check_aml_pep` | AML/PEP-screening (krever DPA + purpose) |
-| `firmaradar.get_recent_changes` | Endringer siste N dager |
-| `firmaradar.list_companies_in_nace` | Bransje-søk (NACE + filtre) |
-| `firmaradar.find_related_companies` | Relasjons-graf via shared person/adresse/UBO |
-| `firmaradar.compare_companies` | Side-by-side for opptil 5 selskap |
-| `firmaradar.search_announcements` | Cross-orgnr kunngjøring-søk |
-
-Detaljerte input-skjemaer hentes runtime via MCP `tools/list` — eller se
-kildekoden i [`python/firmaradar_mcp/tools/`](python/firmaradar_mcp/tools/).
-
----
-
-## Komme i gang
-
-### 1. Skaff en API-nøkkel
-
-Opprett konto på [firmaradar.no](https://firmaradar.no), gå til
-**Mine API-nøkler**, og generer en nøkkel. NB: nøkkelen vises kun én
-gang — kopier den til en sikker plass.
-
-Se [firmaradar.no/prising](https://firmaradar.no/prising) for tier-detaljer
-(noen tools krever Utvidet eller Compliance-tier).
-
-### 2. Installer Python-pakken
+Hvis klienten din ikke støtter remote MCP, kan du kjøre serveren lokalt:
 
 ```bash
-git clone https://github.com/Tiwas/firmaradar-mcp.git
-cd firmaradar-mcp/python
-
-# Lag og aktiver venv (Debian/Ubuntu 23+ krever dette pga PEP 668):
-python3 -m venv .venv
-source .venv/bin/activate
-
-# Installer pakken editable:
-pip install -e .
-
-# Noter absolutt sti til console-scriptet:
-which firmaradar-mcp
-# → /full/path/to/.venv/bin/firmaradar-mcp
+pip install firmaradar-mcp
 ```
 
-### 3. Konfigurer agent-klienten din
-
-#### Claude Desktop
-
-Rediger config-fila:
-* **macOS**: `~/Library/Application Support/Claude/claude_desktop_config.json`
-* **Linux**: `~/.config/claude/claude_desktop_config.json`
-* **Windows**: `%APPDATA%\Claude\claude_desktop_config.json`
+`~/.cursor/mcp.json` eller `~/.codex/config.toml`:
 
 ```json
 {
   "mcpServers": {
     "firmaradar": {
-      "command": "/full/path/to/.venv/bin/firmaradar-mcp",
+      "command": "firmaradar-mcp",
       "env": {
-        "FIRMARADAR_API_KEY": "<din-nøkkel>",
+        "FIRMARADAR_API_KEY": "din-key-fra-firmaradar.no/min-side/api-keys",
         "FIRMARADAR_API_BASE": "https://firmaradar.no"
       }
     }
@@ -108,96 +72,103 @@ Rediger config-fila:
 }
 ```
 
-Restart Claude Desktop. Tools vises under «🔌»-ikonet.
+Hent API-nøkkel: **[firmaradar.no/min-side/api-keys](https://firmaradar.no/min-side/api-keys)** (krever konto).
 
-#### Claude Code CLI (JSON-form — mest robust)
+---
 
-```bash
-claude mcp add-json firmaradar '{
-  "command": "/full/path/to/.venv/bin/firmaradar-mcp",
-  "env": {
-    "FIRMARADAR_API_KEY": "<din-nøkkel>",
-    "FIRMARADAR_API_BASE": "https://firmaradar.no"
-  }
-}'
+## Tool-katalog
 
-# Verifiser:
-claude mcp list
-claude mcp get firmaradar
+17 tools, alle med samme schema i Python (`firmaradar-mcp` på PyPI) og TypeScript (`@firmaradar/mcp-server` på npm):
+
+### Selskaps-oppslag
+- `firmaradar_search_companies` — søk på navn eller orgnr
+- `firmaradar_get_company` — full profil (orgform, NACE, ansatte, adresse, regnskap, eiere, roller)
+- `firmaradar_get_company_ownership` — konsernhierarki opp og ned, eierandeler, person-nivå
+- `firmaradar_get_company_roles` — styre, daglig leder, prokura (med fratrådt-historikk)
+- `firmaradar_get_company_financials` — årsregnskap + nøkkeltall + signaler
+- `firmaradar_get_company_announcements` — BRREG-kunngjøringer (vedtak, fusjoner, oppløsninger)
+- `firmaradar_get_company_signals` — risikoflagg, KYC-flagg, insolvens
+- `firmaradar_find_related_companies` — finn relaterte via eierskap, roller, adresse
+
+### Person-oppslag (krever full-tier)
+- `firmaradar_search_persons` — fuzzy navn-søk
+- `firmaradar_get_person` — profil med adresse + fødselsår
+- `firmaradar_get_person_companies` — alle selskaper personen eier eller har rolle i
+- `firmaradar_get_person_roles` — alle aktive + historiske roller
+
+### KYC / AML
+- `firmaradar_check_aml_pep` — full AML/PEP-screening med sanksjonslister + audit-trail
+
+### Bransje + overvåkning
+- `firmaradar_list_companies_in_nace` — alle selskaper i en NACE-kode + geografisk filter
+- `firmaradar_get_recent_changes` — endringer siste N dager for et orgnr
+- `firmaradar_search_announcements` — fritekst-søk i BRREG-kunngjøringer
+- `firmaradar_compare_companies` — sammenlikne flere selskaper side om side
+
+Full API-referanse + eksempel-prompts: **[firmaradar.no/dokumentasjon](https://firmaradar.no/dokumentasjon)**
+
+---
+
+## Priser
+
+Vi tilbyr én **fellesplattform-pris (99 kr/mnd)** + per-kall-prising. MCP-kallene har dedikert pakke (`mcp_full`) som er rabattert for agentbruk siden agenter genererer høyere volum enn manuelle API-integrasjoner.
+
+Detaljert prising: **[firmaradar.no/prising](https://firmaradar.no/prising)**
+
+---
+
+## Hvorfor open source?
+
+- **Transparens** — du kan lese hvert tool-stub og se nøyaktig hva agenten sender til Firmaradar.
+- **Trust** — koden er Apache 2.0. Audit den selv, eller pin en spesifikk versjon.
+- **Forks velkommen** — vi tar imot PR-er som forbedrer schemas eller legger til kompatibilitets-shims for nye klienter.
+
+Backend (firmaradar.no) er proprietær fordi den eier data-pipeline + lisensiering mot Skatteetaten/Brønnøysund.
+
+---
+
+## Sikkerhet + GDPR
+
+- OAuth 2.0 + PKCE (RFC 7636), DCR (RFC 7591), Protected Resource Metadata (RFC 9728)
+- Alle delegate-tokens er PG-persistente, kobles eksplisitt til en API-nøkkel kunden valgte, og kan revoke-es uavhengig
+- Per-kall audit-logging (kunde-id + nøkkel-id + endpoint + status) — eksporteres via DSAR
+- Person-data pseudonymiseres på server-siden; backuper er kryptert; backup-eksport er offsite
+
+Hele sikkerhets-policyen: **[firmaradar.no/personvern](https://firmaradar.no/personvern)**
+
+---
+
+## Support + spørsmål
+
+- **Bugs i denne MCP-serveren** → [GitHub Issues](https://github.com/Tiwas/firmaradar-mcp/issues)
+- **Spørsmål om data eller priser** → [kontakt Firmaradar](https://firmaradar.no/kontakt)
+- **Sales / partnerskap** → lars@firmaradar.no
+
+---
+
+## Project layout
+
+```
+tools/mcp_server/
+├── README.md                 — denne fila
+├── python/                   — pip-pakken «firmaradar-mcp» (PyPI)
+│   ├── pyproject.toml
+│   ├── firmaradar_mcp/
+│   │   ├── server.py         — MCP stdio + remote (streamable-HTTP)
+│   │   ├── remote_server.py  — OAuth 2.0 + DCR for Claude Mobile/Web
+│   │   ├── client.py         — REST API-wrapper
+│   │   └── tools/            — 17 tool-stubs
+│   └── tests/
+└── typescript/               — npm-pakken «@firmaradar/mcp-server»
+    └── src/
 ```
 
-#### Cursor
-
-Settings → Features → Model Context Protocol → «Add server», eller
-rediger `~/.cursor/mcp.json` med samme JSON-struktur som Claude Desktop.
-
-#### OpenAI Codex CLI
-
-Rediger `~/.codex/config.toml`:
-
-```toml
-[mcp_servers.firmaradar]
-command = "/full/path/to/.venv/bin/firmaradar-mcp"
-env = { FIRMARADAR_API_KEY = "<din-nøkkel>", FIRMARADAR_API_BASE = "https://firmaradar.no" }
-```
-
-#### Gemini CLI (Google)
-
-Rediger `~/.gemini/settings.json` med samme JSON-struktur som Claude Desktop.
-
-### 4. Test det
-
-Start en ny agent-økt og spør:
-
-> *Hvilke Firmaradar-tools har du tilgjengelig?*
-
-Du skal se 17 tools listet. Test deretter et oppslag:
-
-> *Hent grunninfo om Equinor (orgnr 923609016).*
-
 ---
 
-## Bruk-eksempler
+<div align="center">
 
-- *«Finn 20 restauranter i Oslo (kommune 0301) med mer enn 5 ansatte»*
-- *«Vis eier-strukturen til Equinor opp 3 nivåer»*
-- *«Hvem sitter i styret hos Norwegian Air Shuttle?»*
-- *«Sammenlign omsetning siste 5 år for orgnr 982463718 og 991825827»*
-- *«Var det noen konkurser i bygg-bransjen (NACE 41) forrige måned?»*
-- *«Hva sier risikosignalene om orgnr 923609016?»*
+**Bygd av [Firmaradar AS](https://firmaradar.no)** — agentisk infrastruktur for norske selskapsdata.
 
-Naturlig språk — agenten velger riktig tool og bygger argumentene selv.
+[firmaradar.no](https://firmaradar.no) &nbsp;·&nbsp; [Prising](https://firmaradar.no/prising) &nbsp;·&nbsp; [Dokumentasjon](https://firmaradar.no/dokumentasjon) &nbsp;·&nbsp; [Personvern](https://firmaradar.no/personvern)
 
----
-
-## Sikkerhet og personvern
-
-- **API-nøkler** opprettes per bruker, kan revokes når som helst, og rate-limites per tier.
-- **AML/PEP-screening** krever signert DPA + per-call `X-FR-Purpose`-header. Hver kall logges i 60 måneder (Hvitvaskingsloven § 30).
-- **PII-tiering**: standard / utvidet / compliance — se [firmaradar.no/prising](https://firmaradar.no/prising).
-- **Logging til stderr**: serveren sender logs til stderr (ikke stdout) så de ikke korrupter MCP-meldinger. Sett `FIRMARADAR_MCP_LOG_LEVEL=DEBUG` for verbose logging.
-
-Full agent-arkitektur og webhook-plugins er beskrevet på
-[firmaradar.no/agentisk-flyt](https://firmaradar.no/agentisk-flyt).
-
----
-
-## Lisens
-
-Apache License 2.0. Se [LICENSE](LICENSE).
-
-Selve API-tilgangen (mot `https://firmaradar.no/api/v1/`) krever
-en aktiv Firmaradar-konto og er underlagt
-[våre vilkår](https://firmaradar.no/vilkaar).
-
----
-
-## Issues og bidrag
-
-- 🐛 **Bugs/feature-requests**: [Issues](https://github.com/Tiwas/firmaradar-mcp/issues)
-- 📧 **Generell support**: support@firmaradar.no
-- 🔒 **Sikkerhetsfunn**: security@firmaradar.no
-
-Pull requests er velkomne. NB: tool-skjemaer og endpoint-mapping må
-matche serverside (firmaradar.no/api/v1) — endringer der må
-koordineres med Firmaradar-teamet.
+</div>

@@ -85,7 +85,7 @@ async def handle(
 
 
 HANDLER = ToolHandler(
-    name="firmaradar.get_person_roles",
+    name="firmaradar_get_person_roles",
     description=(
         "List all company roles (styreleder, daglig leder, etc.) held by a "
         "person, current and historic. Use when the user asks 'what roles "

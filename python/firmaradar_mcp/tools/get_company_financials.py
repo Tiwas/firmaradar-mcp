@@ -120,7 +120,7 @@ async def handle(
 
 
 HANDLER = ToolHandler(
-    name="firmaradar.get_company_financials",
+    name="firmaradar_get_company_financials",
     description=(
         "Fetch the last N years (default 5) of financial metrics for a "
         "Norwegian company: revenue, operating result, equity, debt, "

@@ -133,7 +133,7 @@ async def handle(
 
 
 HANDLER = ToolHandler(
-    name="firmaradar.get_person",
+    name="firmaradar_get_person",
     description=(
         "Aggregated person profile: name, birth year, active roles, "
         "shareholdings and any AML/PEP risk hits. Strict PII-sensitive — "

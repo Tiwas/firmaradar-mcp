@@ -45,8 +45,24 @@ class GetCompanyOutput(BaseModel):
     orgnr: str
     navn: str | None = None
     konsernstruktur: dict[str, Any] | None = None
-    eiere: dict[str, Any] | None = None
-    tildelinger: dict[str, Any] | None = None
+    # Lars-bug 2026-05-26 (Lokotech-test fra Claude Web):
+    # backend `fetch_business_owners()` + `fetch_full_owners()` returnerer
+    # list[dict] (én entry per aksjonær). MCP-stub antok dict — Pydantic-
+    # validering ga 500 ved owners=business/full. Samme klasse som
+    # tildelinger-bugen. Defensiv håndtering nedenfor i handle().
+    eiere: list[dict[str, Any]] | None = None
+    # Lars-bug-rapport 2026-05-26 (Lokotech-test):
+    # backend `grouped_grants_payload()` returnerer list[dict] (én entry
+    # per kilde — SkatteFUNN, Innovasjon Norge, EU osv.). MCP-stub
+    # antok dict — Pydantic-validering ga 500 og blokkerte HELE
+    # get_company-kallet når 'grants' var i fields[]. Samme schema-
+    # mismatch-klasse som commit 937863a fikset for financials/compare/
+    # person-tools.
+    tildelinger: list[dict[str, Any]] | None = None
+    # brreg_grants leveres som {"cached": bool, "items": [...]} via egen
+    # cached/non-cached-flagg fra `brreg_grants_payload`. Eksisterte
+    # ikke i MCP-output før denne commiten.
+    brreg_tildelinger: dict[str, Any] | None = None
     endringer: list[dict[str, Any]] | None = None
     financial_metrics: dict[str, Any] | None = None
     foretaksklassifisering: dict[str, Any] | None = None
@@ -76,12 +92,25 @@ async def handle(client: FirmaradarClient, params: GetCompanyInput) -> GetCompan
         if klass:
             parts.append(f"klassifisert som {klass}")
         summary = " — ".join(parts) + "."
+    # Defensiv håndtering: hvis backend returnerer feil type for
+    # tildelinger (eldre payload-versjon eller backend-mismatch),
+    # serialiser likevel uten å krasje hele get_company-kallet.
+    raw_tildelinger = payload.get("tildelinger")
+    if raw_tildelinger is not None and not isinstance(raw_tildelinger, list):
+        # Backend-mismatch: pakk inn i list slik at Pydantic ikke krasjer
+        raw_tildelinger = [raw_tildelinger] if isinstance(raw_tildelinger, dict) else None
+    # Samme for eiere — backend returnerer alltid list[dict], men hvis et
+    # eldre kall-mønster returnerer dict, pakk i list-wrapper.
+    raw_eiere = payload.get("eiere")
+    if raw_eiere is not None and not isinstance(raw_eiere, list):
+        raw_eiere = [raw_eiere] if isinstance(raw_eiere, dict) else None
     return GetCompanyOutput(
         orgnr=str(payload.get("orgnr", params.orgnr)),
         navn=payload.get("navn"),
         konsernstruktur=payload.get("konsernstruktur"),
-        eiere=payload.get("eiere"),
-        tildelinger=payload.get("tildelinger"),
+        eiere=raw_eiere,
+        tildelinger=raw_tildelinger,
+        brreg_tildelinger=payload.get("brreg_tildelinger"),
         endringer=payload.get("endringer"),
         financial_metrics=payload.get("financial_metrics"),
         foretaksklassifisering=payload.get("foretaksklassifisering"),
@@ -90,7 +119,7 @@ async def handle(client: FirmaradarClient, params: GetCompanyInput) -> GetCompan
 
 
 HANDLER = ToolHandler(
-    name="firmaradar.get_company",
+    name="firmaradar_get_company",
     description=(
         "Fetch the full profile for one Norwegian company by orgnr: name, group "
         "structure, ownership data, grants, recent BRREG announcements and "

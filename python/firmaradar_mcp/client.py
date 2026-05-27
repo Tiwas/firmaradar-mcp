@@ -94,12 +94,19 @@ class FirmaradarClient:
 
     def __init__(self, config: ClientConfig | None = None) -> None:
         self._config = config or ClientConfig.from_env()
+        from . import __version__ as _mcp_version
+        # X-MCP-Client er BILLING-KRITISK: backend distingverer MCP-kall fra
+        # vanlige API-kall via denne headeren og trekker fra separate
+        # kvote-pools (mcp_full / api_full). Headeren MÅ alltid være satt
+        # når man kaller fra MCP-server-konteksten. Reseved for fremtidig
+        # bruk: cursor/agent-version, modell-navn osv.
         self._client = httpx.AsyncClient(
             base_url=self._config.base_url,
             timeout=self._config.timeout_s,
             headers={
                 "Authorization": f"Bearer {self._config.api_key}",
-                "User-Agent": "firmaradar-mcp/0.1 (+https://firmaradar.no)",
+                "User-Agent": f"firmaradar-mcp/{_mcp_version} (+https://firmaradar.no)",
+                "X-MCP-Client": f"firmaradar-mcp/{_mcp_version}",
                 "Accept": "application/json",
             },
         )

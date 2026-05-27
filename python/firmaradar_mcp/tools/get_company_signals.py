@@ -118,7 +118,7 @@ async def handle(
 
 
 HANDLER = ToolHandler(
-    name="firmaradar.get_company_signals",
+    name="firmaradar_get_company_signals",
     description=(
         "Aggregated risk signals for one company: bankruptcy/distress score, "
         "capital-loss flags, recent role/signature changes, M&A interim-balance "

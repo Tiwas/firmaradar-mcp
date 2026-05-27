@@ -34,9 +34,19 @@ dev = [
     "ruff>=0.4",
     "mypy>=1.10",
 ]
+# `remote` ekstra-en installerer ASGI-stacken som remote_server.py trenger.
+# Stdio-serveren (server.py) bruker INGEN av disse, så vanlig pip install
+# forblir slank — kun MCP-klienter som vil hoste over HTTPS trenger dem.
+remote = [
+    "starlette>=0.40",
+    "uvicorn[standard]>=0.30",
+]
 
 [project.scripts]
 firmaradar-mcp = "firmaradar_mcp.server:main"
+# Remote-HTTP-server for Claude Web + mobile (Android/iOS) connectors.
+# Krever ekstra-en `remote`: pip install 'firmaradar-mcp[remote]'.
+firmaradar-mcp-remote = "firmaradar_mcp.remote_server:main"
 
 [tool.hatch.build.targets.wheel]
 packages = ["firmaradar_mcp"]
