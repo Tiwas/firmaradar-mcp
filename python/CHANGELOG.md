@@ -11,6 +11,24 @@ workflow-nodene på samme funksjonalitets-baseline.
 
 ---
 
+## [0.3.2] — 2026-05-27
+
+### Changed
+
+- **Client-identification header renamed from `X-MCP-Client` to
+  `X-FR-Client`** (Firmaradar Client). The MCP server now sends
+  `X-FR-Client: firmaradar-mcp/<version>` on every backend request.
+  The backend recognizes both headers — legacy `X-MCP-Client` keeps
+  working unchanged — but the new name is preferred and the legacy
+  one is on a 6-month sunset (planned removal evaluated when
+  legacy-traffic drops below 1%). See
+  `docs/arkitektur/CLIENT_IDENTIFICATION_HEADER.md` in the private
+  repo for the full rationale. Pure additive change on the wire;
+  no breaking impact on any caller, including older `firmaradar-mcp`
+  installs continuing to send `X-MCP-Client`.
+
+---
+
 ## [0.3.1] — 2026-05-27
 
 ### Fixed

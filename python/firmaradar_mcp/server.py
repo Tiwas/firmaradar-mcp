@@ -33,7 +33,7 @@ _LOG = logging.getLogger("firmaradar_mcp.server")
 # Holdes stabilt på tvers av versjoner så bruker ikke får "ny server"-prompt
 # ved hver oppgradering.
 _SERVER_NAME = "firmaradar-mcp"
-_SERVER_VERSION = "0.3.1"
+_SERVER_VERSION = "0.3.2"
 
 
 def _configure_logging() -> None:

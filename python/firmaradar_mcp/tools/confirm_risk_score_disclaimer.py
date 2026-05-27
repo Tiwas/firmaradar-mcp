@@ -15,7 +15,8 @@ Compliance:
 
 * ``user_id`` lagres som brukeren bak Bearer-tokenet (Bearer →
   portal_api_key → user_id-kjeden er 1:1).
-* User-Agent i audit-tabellen inkluderer ``X-MCP-Client``-headeren slik
+* User-Agent i audit-tabellen inkluderer klient-marker-headeren
+  (``X-FR-Client`` foretrukket, eller legacy ``X-MCP-Client``) slik
   at MCP-opphav er sporbart uten ny kolonne.
 * Krever at OAuth-token er knyttet til en bruker som har risikoscoring
   aktivert i sin pakke (403 ``extension_not_active`` ellers).

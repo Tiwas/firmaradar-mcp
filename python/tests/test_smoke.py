@@ -136,6 +136,38 @@ def test_client_config_reads_env(monkeypatch: pytest.MonkeyPatch) -> None:
     assert config.base_url == "http://localhost:8080"  # trailing slash stripped
 
 
+def test_client_sends_x_fr_client_header_not_legacy_x_mcp(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """MCP-serveren skal sende den NYE ``X-FR-Client``-headeren med
+    ``firmaradar-mcp/<v>``-prefiks, ikke den legacy ``X-MCP-Client``-
+    headeren. Backend støtter begge i 6+ mnd, men ny kode skal kun sende
+    foretrukket header (Lars-beslutning 2026-05-27, #L_telemetri.A).
+
+    Snapshot-test: hvis noen ved en feil reverterer ``client.py`` til
+    legacy-headeren skal denne testen fange det.
+    """
+    from firmaradar_mcp import __version__ as _mcp_version
+    from firmaradar_mcp.client import FirmaradarClient
+
+    monkeypatch.setenv(ENV_API_KEY, "test-key")
+    client = FirmaradarClient()
+    default_headers = client._client.headers
+    assert "X-FR-Client" in default_headers, (
+        "MCP-klienten skal sende X-FR-Client (foretrukket). "
+        f"Fant headers: {dict(default_headers)}"
+    )
+    # Forventet verdi inkluderer pakke-versjonen — billing-relevant
+    # at MCP-pool identifiseres via ``mcp``-substring i verdien.
+    assert default_headers["X-FR-Client"] == f"firmaradar-mcp/{_mcp_version}"
+    # Legacy-headeren skal IKKE lenger sendes — backend håndterer
+    # bakoverkompatibilitet, ikke klienten.
+    assert "X-MCP-Client" not in default_headers, (
+        "Legacy X-MCP-Client skal IKKE sendes av ny MCP-klient. "
+        f"Fant headers: {dict(default_headers)}"
+    )
+
+
 def test_server_module_imports() -> None:
     """Server module must import cleanly even before MCP wiring is done."""
     module = importlib.import_module("firmaradar_mcp.server")

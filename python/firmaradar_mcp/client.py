@@ -95,18 +95,29 @@ class FirmaradarClient:
     def __init__(self, config: ClientConfig | None = None) -> None:
         self._config = config or ClientConfig.from_env()
         from . import __version__ as _mcp_version
-        # X-MCP-Client er BILLING-KRITISK: backend distingverer MCP-kall fra
-        # vanlige API-kall via denne headeren og trekker fra separate
-        # kvote-pools (mcp_full / api_full). Headeren MÅ alltid være satt
-        # når man kaller fra MCP-server-konteksten. Reseved for fremtidig
-        # bruk: cursor/agent-version, modell-navn osv.
+        # X-FR-Client er BILLING-KRITISK: backend distingverer MCP-kall
+        # fra vanlige API-kall (n8n/Make/Power-Automate) via denne
+        # headeren og trekker fra separate kvote-pools (mcp_full /
+        # api_full). Headeren MÅ alltid være satt når man kaller fra
+        # MCP-server-konteksten. Reseved for fremtidig bruk:
+        # cursor/agent-version, modell-navn osv.
+        #
+        # Header-navnet ble endret fra ``X-MCP-Client`` til
+        # ``X-FR-Client`` i 2026-05-27 (#L_telemetri.A) for å gi en
+        # enhetlig klient-identifikator på tvers av MCP, n8n, Make.com og
+        # Power Automate. Backend støtter fortsatt legacy
+        # ``X-MCP-Client`` i minst 6 mnd, men nye MCP-server-versjoner
+        # sender utelukkende ``X-FR-Client``. Verdien beholder
+        # ``firmaradar-mcp/``-prefiks slik at backend kan classifisere
+        # kallet som MCP-pool (substring-match ``mcp``). Se
+        # ``docs/arkitektur/CLIENT_IDENTIFICATION_HEADER.md``.
         self._client = httpx.AsyncClient(
             base_url=self._config.base_url,
             timeout=self._config.timeout_s,
             headers={
                 "Authorization": f"Bearer {self._config.api_key}",
                 "User-Agent": f"firmaradar-mcp/{_mcp_version} (+https://firmaradar.no)",
-                "X-MCP-Client": f"firmaradar-mcp/{_mcp_version}",
+                "X-FR-Client": f"firmaradar-mcp/{_mcp_version}",
                 "Accept": "application/json",
             },
         )
