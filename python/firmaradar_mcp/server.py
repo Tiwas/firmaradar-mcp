@@ -22,6 +22,7 @@ from mcp import types
 from mcp.server import NotificationOptions, Server
 from mcp.server.models import InitializationOptions
 from mcp.server.stdio import stdio_server
+from pydantic import BaseModel
 
 from .client import FirmaradarClient, FirmaradarClientError
 from .tools import ALL_TOOLS, TOOL_TITLES, WRITE_TOOLS, ToolHandler
@@ -66,6 +67,45 @@ def _input_schema_to_json(handler: ToolHandler) -> dict[str, Any]:
     return schema
 
 
+def _output_schema_to_json(handler: ToolHandler) -> dict[str, Any]:
+    """Konverter pydantic output-modellen til JSON Schema for MCP ``outputSchema``.
+
+    Speiler :func:`_input_schema_to_json`. MCP-connector-katalogene (OpenAI
+    Apps SDK, Claude) anbefaler at verktøy deklarerer ``outputSchema`` slik at
+    agenten kan forutse svar-formen og validere strukturerte resultater.
+    Pydantic ``model_json_schema()`` er JSON Schema-kompatibelt.
+    """
+    schema = handler.output_schema.model_json_schema()
+    schema.pop("title", None)
+    return schema
+
+
+def _structured_content(handler: ToolHandler, result: Any) -> dict[str, Any] | None:
+    """Bygg ``structuredContent`` (dict) som speiler ``outputSchema``, best-effort.
+
+    Når et verktøy deklarerer ``outputSchema`` bør kallet også returnere
+    strukturerte data (MCP-spec 2025-06-18). Vi serialiserer handler-resultatet
+    til en dict på samme måte som tekst-innholdet (``exclude_none=True`` for
+    kompakthet).
+
+    Returnerer ``None`` hvis resultatet ikke lar seg representere som et objekt
+    (f.eks. en streng eller en tuple som ikke coerce-er rent gjennom modellen).
+    Det er trygt: :func:`build_server` returnerer alltid en ``CallToolResult``,
+    så SDK-en kjører ingen streng ``outputSchema``-validering som ville feilet
+    på manglende struktur.
+    """
+    if isinstance(result, BaseModel):
+        return result.model_dump(mode="json", exclude_none=True)
+    if isinstance(result, dict):
+        return result
+    # tuple/str/annet — prøv å coerce via den deklarerte output-modellen.
+    try:
+        coerced = handler.output_schema.model_validate(result)
+    except Exception:  # noqa: BLE001 — best-effort; faller tilbake på ren tekst
+        return None
+    return coerced.model_dump(mode="json", exclude_none=True)
+
+
 def _handler_to_tool(handler: ToolHandler) -> types.Tool:
     """Bygg MCP ``Tool``-annonsen for én handler, med tittel + annotations.
 
@@ -95,6 +135,7 @@ def _handler_to_tool(handler: ToolHandler) -> types.Tool:
 
     Calls:
         - _input_schema_to_json() - JSON Schema for input-modellen.
+        - _output_schema_to_json() - JSON Schema for output-modellen.
     """
     title = TOOL_TITLES.get(handler.name, handler.name)
     read_only = handler.name not in WRITE_TOOLS
@@ -103,6 +144,7 @@ def _handler_to_tool(handler: ToolHandler) -> types.Tool:
         title=title,
         description=handler.description,
         inputSchema=_input_schema_to_json(handler),
+        outputSchema=_output_schema_to_json(handler),
         annotations=types.ToolAnnotations(
             title=title,
             readOnlyHint=read_only,
@@ -133,6 +175,23 @@ def _result_to_text_content(result: Any) -> list[types.TextContent]:
     )]
 
 
+def _error_result(payload: dict[str, Any]) -> types.CallToolResult:
+    """Bygg et MCP-feilsvar (``isError=True``) fra en feil-payload.
+
+    Returnerer en ``CallToolResult`` slik at SDK-en tar den as-is (early
+    return) og *ikke* kjører ``outputSchema``-validering — feilsvar matcher
+    aldri suksess-skjemaet, og ``isError=True`` er korrekt MCP-semantikk så
+    klienter kan skille feil fra gyldige resultater.
+    """
+    return types.CallToolResult(
+        content=[types.TextContent(
+            type="text",
+            text=json.dumps(payload, ensure_ascii=False),
+        )],
+        isError=True,
+    )
+
+
 def build_server(tools: list[ToolHandler], client: FirmaradarClient) -> Server:
     """Konstruér MCP Server-instans med list_tools + call_tool wired.
 
@@ -147,64 +206,57 @@ def build_server(tools: list[ToolHandler], client: FirmaradarClient) -> Server:
         return [_handler_to_tool(h) for h in tools]
 
     @server.call_tool()
-    async def _call_tool(name: str, arguments: dict | None) -> list[types.TextContent]:
+    async def _call_tool(name: str, arguments: dict | None) -> types.CallToolResult:
+        # Vi returnerer alltid en CallToolResult: suksess med ``content`` +
+        # ``structuredContent`` (speiler outputSchema), feil med ``isError=True``.
+        # Det gjør at SDK-en tar resultatet as-is og hopper over streng
+        # outputSchema-validering, så heterogene handler-retur-typer (modell,
+        # dict, tuple) aldri kan crashe et kall.
         handler = tools_index.get(name)
         if handler is None:
-            return [types.TextContent(
-                type="text",
-                text=json.dumps({
-                    "error": f"Unknown tool: {name}",
-                    "available_tools": sorted(tools_index.keys()),
-                }, ensure_ascii=False),
-            )]
+            return _error_result({
+                "error": f"Unknown tool: {name}",
+                "available_tools": sorted(tools_index.keys()),
+            })
         try:
             # Validér + parse argumenter via pydantic-modellen
             params = handler.input_schema(**(arguments or {}))
         except Exception as exc:  # pydantic.ValidationError er en Exception
-            return [types.TextContent(
-                type="text",
-                text=json.dumps({
-                    "error": "Invalid arguments",
-                    "tool": name,
-                    "details": str(exc),
-                }, ensure_ascii=False),
-            )]
+            return _error_result({
+                "error": "Invalid arguments",
+                "tool": name,
+                "details": str(exc),
+            })
         try:
             result = await handler.handler(client, params)
         except NotImplementedError as exc:
             # v0.1-tools som ennå ikke har backend — gi pent feilsvar
             # istedenfor å crashe hele MCP-økten.
-            return [types.TextContent(
-                type="text",
-                text=json.dumps({
-                    "error": "Tool not implemented in this version",
-                    "tool": name,
-                    "details": str(exc),
-                }, ensure_ascii=False),
-            )]
+            return _error_result({
+                "error": "Tool not implemented in this version",
+                "tool": name,
+                "details": str(exc),
+            })
         except FirmaradarClientError as exc:
-            return [types.TextContent(
-                type="text",
-                text=json.dumps({
-                    "error": "Firmaradar API error",
-                    "tool": name,
-                    "status_code": exc.status_code,
-                    "error_code": exc.error_code,
-                    "details": str(exc),
-                    "retry_after_s": exc.retry_after_s,
-                }, ensure_ascii=False),
-            )]
+            return _error_result({
+                "error": "Firmaradar API error",
+                "tool": name,
+                "status_code": exc.status_code,
+                "error_code": exc.error_code,
+                "details": str(exc),
+                "retry_after_s": exc.retry_after_s,
+            })
         except Exception as exc:  # noqa: BLE001
             _LOG.exception("Tool %s raised", name)
-            return [types.TextContent(
-                type="text",
-                text=json.dumps({
-                    "error": "Internal error",
-                    "tool": name,
-                    "details": str(exc),
-                }, ensure_ascii=False),
-            )]
-        return _result_to_text_content(result)
+            return _error_result({
+                "error": "Internal error",
+                "tool": name,
+                "details": str(exc),
+            })
+        return types.CallToolResult(
+            content=_result_to_text_content(result),
+            structuredContent=_structured_content(handler, result),
+        )
 
     return server
 

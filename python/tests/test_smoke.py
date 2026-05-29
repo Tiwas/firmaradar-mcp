@@ -123,6 +123,62 @@ def test_list_tools_advertises_titles_and_annotations() -> None:
         assert ann.idempotentHint is True, f"{tool.name} skal være idempotent"
 
 
+def test_every_tool_advertises_output_schema() -> None:
+    """``_handler_to_tool`` skal sette ``outputSchema`` på hvert verktøy.
+
+    OpenAI Apps SDK + Claude flagger ``OUTPUT SCHEMA RECOMMENDED`` når et
+    verktøy mangler det. Vi deklarerer det fra den pydantic output-modellen
+    hvert tool allerede har, og forventer et gyldig objekt-skjema."""
+    from firmaradar_mcp import server
+
+    for handler in ALL_TOOLS:
+        tool = server._handler_to_tool(handler)
+        assert tool.outputSchema is not None, f"{tool.name} mangler outputSchema"
+        # Pydantic-genererte skjemaer for BaseModel er alltid objekt-skjemaer.
+        assert tool.outputSchema.get("type") == "object", (
+            f"{tool.name}: outputSchema skal være et objekt-skjema"
+        )
+        # Skjemaet skal beskrive minst ett felt (properties) ELLER referere
+        # nøstede modeller via $defs — tomt skjema er en feil.
+        assert tool.outputSchema.get("properties") or tool.outputSchema.get("$defs"), (
+            f"{tool.name}: outputSchema mangler properties/$defs"
+        )
+
+
+def test_error_result_is_flagged_and_unstructured() -> None:
+    """Feilsvar skal være ``isError=True`` uten ``structuredContent`` — slik at
+    SDK-en tar dem as-is og ikke kjører outputSchema-validering på dem."""
+    from firmaradar_mcp import server
+
+    res = server._error_result({"error": "boom", "tool": "x"})
+    assert res.isError is True
+    assert res.structuredContent is None
+    assert res.content and res.content[0].type == "text"
+
+
+def test_structured_content_serialises_models_and_dicts() -> None:
+    """``_structured_content`` skal returnere en dict for BaseModel/dict og
+    ``None`` for ikke-coerce-bare typer (trygt — vi returnerer alltid
+    CallToolResult, så None gir ren tekst uten valideringsfeil)."""
+    from pydantic import BaseModel
+
+    from firmaradar_mcp import server
+    from firmaradar_mcp.tools import ALL_TOOLS as _tools
+
+    class _Sample(BaseModel):
+        a: int
+        b: str | None = None
+
+    handler = _tools[0]  # vilkårlig handler — kun output_schema brukes i str-grenen
+
+    # BaseModel → dict, exclude_none dropper b=None
+    assert server._structured_content(handler, _Sample(a=1)) == {"a": 1}
+    # dict → passthrough
+    assert server._structured_content(handler, {"k": "v"}) == {"k": "v"}
+    # ren streng coerce-er ikke gjennom en objekt-modell → None
+    assert server._structured_content(handler, "not-an-object") is None
+
+
 def test_no_tool_uses_json_kwarg_on_client_post() -> None:
     """Regresjon: ``FirmaradarClient.post()`` tar ``json_body=``, ikke ``json=``.
     ``get_aml_score`` ble deployet med ``json=`` og feilet i prod 2026-05-28
