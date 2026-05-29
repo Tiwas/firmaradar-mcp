@@ -1,6 +1,6 @@
 """MCP stdio-server entry point.
 
-Boots the Model Context Protocol server, registers all 17 tools, and
+Boots the Model Context Protocol server, registers all 25 tools, and
 runs the stdio event loop. Each tool is implemented as a small
 self-contained module under :mod:`firmaradar_mcp.tools`; this file
 orchestrates registration and dispatch.
@@ -24,7 +24,7 @@ from mcp.server.models import InitializationOptions
 from mcp.server.stdio import stdio_server
 
 from .client import FirmaradarClient, FirmaradarClientError
-from .tools import ALL_TOOLS, ToolHandler
+from .tools import ALL_TOOLS, TOOL_TITLES, WRITE_TOOLS, ToolHandler
 
 
 _LOG = logging.getLogger("firmaradar_mcp.server")
@@ -66,6 +66,53 @@ def _input_schema_to_json(handler: ToolHandler) -> dict[str, Any]:
     return schema
 
 
+def _handler_to_tool(handler: ToolHandler) -> types.Tool:
+    """Bygg MCP ``Tool``-annonsen for én handler, med tittel + annotations.
+
+    Setter en menneskevennlig ``title`` (vist i agent-klienten) og fyller
+    ``ToolAnnotations`` slik MCP-connector-katalogene krever:
+
+    * ``readOnlyHint`` — ``True`` for alle rene oppslag; ``False`` for verktøy i
+      :data:`~firmaradar_mcp.tools.WRITE_TOOLS` (skriver state, f.eks.
+      disclaimer-bekreftelse).
+    * ``destructiveHint`` — alltid ``False``; ingen verktøy sletter/ødelegger.
+    * ``idempotentHint`` — ``True``; gjentatte kall gir samme effekt.
+    * ``openWorldHint`` — ``True`` for oppslag (data speiler eksterne norske
+      registre, og noen kall treffer BRREG live); ``False`` for den interne
+      skrive-operasjonen.
+
+    Tittel hentes fra :data:`~firmaradar_mcp.tools.TOOL_TITLES`; mangler den
+    faller vi tilbake på selve verktøynavnet.
+
+    Args:
+        handler: tool-handleren fra :data:`~firmaradar_mcp.tools.ALL_TOOLS`.
+
+    Returns:
+        En ferdig ``types.Tool`` klar for ``list_tools``-svaret.
+
+    Called by:
+        - build_server._list_tools() - bygger hele tool-katalogen.
+
+    Calls:
+        - _input_schema_to_json() - JSON Schema for input-modellen.
+    """
+    title = TOOL_TITLES.get(handler.name, handler.name)
+    read_only = handler.name not in WRITE_TOOLS
+    return types.Tool(
+        name=handler.name,
+        title=title,
+        description=handler.description,
+        inputSchema=_input_schema_to_json(handler),
+        annotations=types.ToolAnnotations(
+            title=title,
+            readOnlyHint=read_only,
+            destructiveHint=False,
+            idempotentHint=True,
+            openWorldHint=read_only,
+        ),
+    )
+
+
 def _result_to_text_content(result: Any) -> list[types.TextContent]:
     """Pakke handler-resultatet inn i MCP TextContent.
 
@@ -97,14 +144,7 @@ def build_server(tools: list[ToolHandler], client: FirmaradarClient) -> Server:
 
     @server.list_tools()
     async def _list_tools() -> list[types.Tool]:
-        return [
-            types.Tool(
-                name=h.name,
-                description=h.description,
-                inputSchema=_input_schema_to_json(h),
-            )
-            for h in tools
-        ]
+        return [_handler_to_tool(h) for h in tools]
 
     @server.call_tool()
     async def _call_tool(name: str, arguments: dict | None) -> list[types.TextContent]:

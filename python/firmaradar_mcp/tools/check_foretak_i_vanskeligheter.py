@@ -73,10 +73,13 @@ async def handle(
 HANDLER = ToolHandler(
     name="firmaradar_check_foretak_i_vanskeligheter",
     description=(
-        "Assess whether a Norwegian company is 'foretak i vanskeligheter' "
-        "(financially distressed) per NUES rules a-e. Returns which rules "
-        "triggered + overall status + confidence. Used in EU state-aid eligibility "
-        "checks, kreditt-vurdering, and supplier risk screening."
+        "Assess whether a Norwegian company qualifies as *foretak i "
+        "vanskeligheter* (a 'company in difficulty') under NUES criteria "
+        "a-e. Returns which criteria triggered, the overall distress "
+        "status, and a data-completeness confidence score — a "
+        "deterministic distress classification, not a raw registry flag. "
+        "Use for EU state-aid eligibility, credit assessment, and "
+        "supplier-risk screening."
     ),
     input_schema=CheckFivInput,
     output_schema=CheckFivOutput,

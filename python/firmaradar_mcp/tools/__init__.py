@@ -111,4 +111,55 @@ ALL_TOOLS: list[ToolHandler] = [
 ]
 
 
-__all__ = ["ALL_TOOLS", "ToolHandler"]
+# ---------------------------------------------------------------------------
+# Display metadata for the MCP tool advertisement (``list_tools``).
+#
+# ``TOOL_TITLES`` gives each tool a short, user-friendly title shown in agent
+# clients (Claude, Cursor, …) and required by the MCP connector directories.
+# ``WRITE_TOOLS`` lists the tools that are NOT read-only; every other tool is a
+# pure registry lookup. Both are read by :mod:`firmaradar_mcp.server` when it
+# builds the ``Tool`` objects and their ``ToolAnnotations``.
+#
+# Titles follow the Firmaradar brand voice (see ``README.md`` § "Brand voice"):
+# scope is explicit — company vs. person, AML vs. risk — so agents pick the
+# right tool for the user's intent (e.g. ``get_risk_score`` is *company* health,
+# not personal credit).
+# ---------------------------------------------------------------------------
+TOOL_TITLES: dict[str, str] = {
+    "firmaradar_search_companies": "Search Companies",
+    "firmaradar_get_company": "Get Company Profile",
+    "firmaradar_get_company_ownership": "Get Company Ownership",
+    "firmaradar_get_company_roles": "Get Company Roles",
+    "firmaradar_get_company_financials": "Get Company Financials",
+    "firmaradar_get_company_announcements": "Get Company Announcements",
+    "firmaradar_search_persons": "Search Persons",
+    "firmaradar_get_person": "Get Person Profile",
+    "firmaradar_get_person_roles": "Get Person Roles",
+    "firmaradar_get_person_companies": "Get Person's Companies",
+    "firmaradar_get_company_signals": "Get Company Risk Signals",
+    "firmaradar_check_aml_pep": "AML / PEP Screening",
+    "firmaradar_get_recent_changes": "Get Recent Changes",
+    "firmaradar_list_companies_in_nace": "List Companies by Industry (NACE)",
+    "firmaradar_find_related_companies": "Find Related Companies",
+    "firmaradar_compare_companies": "Compare Companies",
+    "firmaradar_search_announcements": "Search Announcements",
+    "firmaradar_get_risk_score": "Get Company Risk Score",
+    "firmaradar_check_foretak_i_vanskeligheter": "Check Company in Difficulty (FIV)",
+    "firmaradar_get_aml_score": "Get Company AML Risk Score",
+    "firmaradar_get_konsernstotte": "Get Group Support (Konsernstøtte)",
+    "firmaradar_get_skattelister": "Get Tax List Data",
+    "firmaradar_confirm_risk_score_disclaimer": "Confirm Risk-Score Disclaimer",
+    "firmaradar_check_fiv_bulk": "Bulk Check Companies in Difficulty (FIV)",
+    "firmaradar_get_risk_score_bulk": "Bulk Company Risk Scores",
+}
+
+# Tools that mutate state (not read-only). Everything else is a pure lookup and
+# is advertised with ``readOnlyHint=True``. ``confirm_risk_score_disclaimer``
+# writes a consent/audit record (``extension_kundebekreftelse_event``), so it is
+# the one tool advertised with ``readOnlyHint=False``.
+WRITE_TOOLS: frozenset[str] = frozenset({
+    "firmaradar_confirm_risk_score_disclaimer",
+})
+
+
+__all__ = ["ALL_TOOLS", "ToolHandler", "TOOL_TITLES", "WRITE_TOOLS"]

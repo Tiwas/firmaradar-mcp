@@ -55,7 +55,7 @@ async def handle(
 ) -> GetAmlScoreOutput:
     payload = await client.post(
         "/api/v1/aml/score",
-        json={"orgnr": params.orgnr, "purpose": params.purpose},
+        json_body={"orgnr": params.orgnr, "purpose": params.purpose},
     )
     if not isinstance(payload, dict):
         payload = {}

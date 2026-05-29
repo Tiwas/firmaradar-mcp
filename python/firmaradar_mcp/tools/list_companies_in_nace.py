@@ -147,12 +147,12 @@ HANDLER = ToolHandler(
         "List Norwegian companies in a specific NACE industry code (or code "
         "prefix), optionally filtered by status, kommune and size. Useful for "
         "sector analysis ('all active restaurants in Oslo with > 5 employees').\n\n"
-        "**NACE-format-warning:** Bruk EU NACE Rev. 2-format med trailing-null "
-        "(e.g. `62.100`, `62.200`, `58.290`). "
-        "**Norsk SN2007-format (`62.01`, `62.02`) returnerer 0 treff** — vi "
-        "lagrer ikke i SN2007. Hvis du er usikker på en kode, sjekk "
-        "`list_companies_in_nace` med ulike formater først eller bekreft mot "
-        "https://www.brreg.no."
+        "**NACE format warning:** Use the EU NACE Rev. 2 format with a "
+        "trailing zero (e.g. `62.100`, `62.200`, `58.290`). "
+        "**The Norwegian SN2007 format (`62.01`, `62.02`) returns 0 hits** — "
+        "we do not store SN2007. If you are unsure about a code, try "
+        "`list_companies_in_nace` with different formats first, or verify "
+        "against https://www.brreg.no."
     ),
     input_schema=ListCompaniesInNaceInput,
     output_schema=ListCompaniesInNaceOutput,

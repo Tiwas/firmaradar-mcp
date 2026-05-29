@@ -2,13 +2,15 @@
 
 These tests verify that:
 
-* The 17-tool registry imports and exposes all expected names.
+* The 25-tool registry imports and exposes all expected names.
+* Every tool has a user-friendly title and accurate MCP
+  ``ToolAnnotations`` (readOnlyHint etc.) — required by the connector
+  directories.
 * Handler-signaturen er ``(client, params)`` per Lars-beslutning 2026-05-25.
-* 4 DEFER-tools (check_aml_pep, get_company_signals,
-  find_related_companies, search_announcements) raiser
-  NotImplementedError ved kall — implementeres i v0.2.
-* 13 IMPLEMENTED-tools er kallbare (kallet vil prøve å nå REST-API
-  og kan kaste FirmaradarClientError mot mock, men ikke
+* 1 DEFER-tool (find_related_companies) raiser NotImplementedError ved
+  kall — implementeres i en senere versjon.
+* The remaining implemented tools er kallbare (kallet vil prøve å nå
+  REST-API og kan kaste FirmaradarClientError mot mock, men ikke
   NotImplementedError).
 * The :class:`ClientConfig` correctly refuses to start without an
   API-key.
@@ -50,13 +52,24 @@ EXPECTED_TOOL_NAMES = {
     "firmaradar_compare_companies",
     # Tverr-søk (1)
     "firmaradar_search_announcements",
+    # v0.3 markedsplass-utvidelser (#130) (5)
+    "firmaradar_get_risk_score",
+    "firmaradar_check_foretak_i_vanskeligheter",
+    "firmaradar_get_aml_score",
+    "firmaradar_get_konsernstotte",
+    "firmaradar_get_skattelister",
+    # v0.3 compliance-helper (#134) (1)
+    "firmaradar_confirm_risk_score_disclaimer",
+    # v0.3 bulk-portfolio-screening (#134) (2)
+    "firmaradar_check_fiv_bulk",
+    "firmaradar_get_risk_score_bulk",
 }
 
 
-def test_registry_lists_all_seventeen_tools() -> None:
+def test_registry_lists_all_tools() -> None:
     names = {tool.name for tool in ALL_TOOLS}
     assert names == EXPECTED_TOOL_NAMES, names.symmetric_difference(EXPECTED_TOOL_NAMES)
-    assert len(ALL_TOOLS) == 17
+    assert len(ALL_TOOLS) == 25
 
 
 def test_every_tool_has_description_and_schemas() -> None:
@@ -67,36 +80,91 @@ def test_every_tool_has_description_and_schemas() -> None:
         assert callable(tool.handler), f"{tool.name} handler not callable"
 
 
-# 4 tools er bevisst utsatt til v0.2 — disse skal raise
-# NotImplementedError med en hjelpende workaround-melding.
-DEFERRED_TOOL_NAMES = {
-    "firmaradar_check_aml_pep",
-    "firmaradar_get_company_signals",
-    "firmaradar_find_related_companies",
-    "firmaradar_search_announcements",
-}
+def test_every_tool_has_user_friendly_title() -> None:
+    """MCP-connector-katalogene krever en menneskevennlig tittel per verktøy.
+    Hver tool i registeret må ha en ``TOOL_TITLES``-oppføring (ikke bare navnet),
+    og det skal ikke finnes orphan-titler for verktøy som ikke finnes."""
+    from firmaradar_mcp.tools import TOOL_TITLES
+
+    names = {tool.name for tool in ALL_TOOLS}
+    assert set(TOOL_TITLES) == names, set(TOOL_TITLES).symmetric_difference(names)
+    for name, title in TOOL_TITLES.items():
+        assert title.strip(), f"{name} har tom tittel"
+        assert title != name, f"{name} bør ha en lesbar tittel, ikke selve verktøynavnet"
 
 
-@pytest.mark.parametrize(
-    "tool",
-    [t for t in ALL_TOOLS if t.name in DEFERRED_TOOL_NAMES],
-    ids=lambda t: t.name,
-)
-async def test_deferred_tools_raise_with_helpful_message(tool) -> None:
-    """v0.2-deferred tools skal raise NotImplementedError med v0.1-
-    workaround i meldingen, slik at agenten får handling."""
+def test_exactly_the_disclaimer_tool_is_a_write_tool() -> None:
+    """Bare disclaimer-bekreftelsen skriver state; alt annet er rene oppslag."""
+    from firmaradar_mcp.tools import WRITE_TOOLS
+
+    names = {tool.name for tool in ALL_TOOLS}
+    assert WRITE_TOOLS == {"firmaradar_confirm_risk_score_disclaimer"}
+    assert WRITE_TOOLS <= names, WRITE_TOOLS - names
+
+
+def test_list_tools_advertises_titles_and_annotations() -> None:
+    """``server._handler_to_tool`` skal sette ``title`` + ``ToolAnnotations`` på
+    hvert verktøy: ``readOnlyHint=True`` for oppslag, ``False`` for skrive-
+    verktøy, aldri destruktivt."""
+    from firmaradar_mcp import server
+    from firmaradar_mcp.tools import WRITE_TOOLS
+
+    for handler in ALL_TOOLS:
+        tool = server._handler_to_tool(handler)
+        assert tool.title, f"{tool.name} mangler title"
+        assert tool.annotations is not None, f"{tool.name} mangler annotations"
+        ann = tool.annotations
+        assert ann.title == tool.title, f"{tool.name}: annotation-title != tool-title"
+        expected_read_only = tool.name not in WRITE_TOOLS
+        assert ann.readOnlyHint is expected_read_only, (
+            f"{tool.name}: readOnlyHint skal være {expected_read_only}"
+        )
+        assert ann.destructiveHint is False, f"{tool.name} skal ikke være destruktivt"
+        assert ann.idempotentHint is True, f"{tool.name} skal være idempotent"
+
+
+def test_no_tool_uses_json_kwarg_on_client_post() -> None:
+    """Regresjon: ``FirmaradarClient.post()`` tar ``json_body=``, ikke ``json=``.
+    ``get_aml_score`` ble deployet med ``json=`` og feilet i prod 2026-05-28
+    (TypeError før HTTP-kallet ble sendt). Vakt mot at feil kwarg sniker seg
+    inn igjen i et hvilket som helst tool."""
+    import pathlib
+    from firmaradar_mcp import tools as _tools_pkg
+
+    tools_dir = pathlib.Path(_tools_pkg.__file__).parent
+    offenders = [
+        path.name
+        for path in sorted(tools_dir.glob("*.py"))
+        if "client.post(" in (src := path.read_text(encoding="utf-8")) and "json=" in src
+    ]
+    assert not offenders, f"tools som bruker json= i stedet for json_body=: {offenders}"
+
+
+# Ingen verktøy er lenger *rent* deferred — alle gjør reelle API-kall. Det
+# eneste gjenværende deferrede er én *modus*: ``find_related_companies`` med
+# via=owner (krever UBO-graf-traversal, deferred til v0.3). Den dekkes av den
+# fokuserte testen under; alle 25 verktøy har korrekt handler-signatur.
+async def test_find_related_companies_owner_mode_is_deferred() -> None:
+    """``find_related_companies`` er implementert for via=person/address, men
+    via=owner er deferred (krever UBO-graf-traversal) og skal raise
+    NotImplementedError med en hjelpende workaround-melding — uten å treffe
+    REST-API-et, siden sjekken skjer før nettverkskallet."""
     import os
     os.environ.setdefault("FIRMARADAR_API_KEY", "test-key-for-test-only")
     from firmaradar_mcp.client import FirmaradarClient
+    from firmaradar_mcp.tools.find_related_companies import (
+        FindRelatedCompaniesInput,
+        handle,
+    )
+
     client = FirmaradarClient()
     try:
-        payload = _minimal_payload(tool.input_schema)
+        params = FindRelatedCompaniesInput(orgnr="123456789", via="owner")
         with pytest.raises(NotImplementedError) as exc_info:
-            await tool.handler(client, payload)
-        # Skal nevne "v0.1" eller "v0.2" i meldingen så agenten vet status
+            await handle(client, params)
         msg = str(exc_info.value).lower()
-        assert "v0.1" in msg or "v0.2" in msg, (
-            f"{tool.name}: NotImplementedError-melding bør referere v0.1/v0.2-status"
+        assert "v0.3" in msg or "owner" in msg, (
+            "NotImplementedError-meldingen bør forklare at via=owner er deferred"
         )
     finally:
         await client.aclose()
@@ -104,11 +172,11 @@ async def test_deferred_tools_raise_with_helpful_message(tool) -> None:
 
 @pytest.mark.parametrize(
     "tool",
-    [t for t in ALL_TOOLS if t.name not in DEFERRED_TOOL_NAMES],
+    list(ALL_TOOLS),
     ids=lambda t: t.name,
 )
 def test_implemented_tools_accept_client_and_params(tool) -> None:
-    """13 IMPLEMENTED-tools skal ha (client, params)-signatur.
+    """Alle tools skal ha (client, params)-signatur.
     Vi sjekker bare at signaturen er korrekt; faktisk kall krever
     live API-gates (egne integrasjonstester)."""
     import inspect

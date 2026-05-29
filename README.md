@@ -159,7 +159,7 @@ tools/mcp_server/
 │   │   ├── server.py         — MCP stdio og ekstern (streamable-HTTP)
 │   │   ├── remote_server.py  — OAuth 2.0 og DCR for Claude Mobile/Web
 │   │   ├── client.py         — REST-API-wrapper
-│   │   └── tools/            — 17 verktøy-moduler
+│   │   └── tools/            — 25 verktøy-moduler
 │   └── tests/
 └── typescript/               — npm-pakken «@firmaradar/mcp-server»
     └── src/

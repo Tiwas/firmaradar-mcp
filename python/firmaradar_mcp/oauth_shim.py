@@ -303,7 +303,7 @@ _AUTHORIZE_FORM_HTML = """<!DOCTYPE html>
 <body>
     <div class="container">
         <h1>🔌 Koble til Firmaradar MCP</h1>
-        <p class="subtitle">Gi AI-agenten din tilgang til 17 verktøy for norske selskapsdata.</p>
+        <p class="subtitle">Gi AI-agenten din tilgang til 25 verktøy for norske selskapsdata.</p>
 
         <div class="client-info">
             <strong>{client_name}</strong> ber om tilgang.

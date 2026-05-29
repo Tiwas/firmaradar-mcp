@@ -18,7 +18,7 @@ Arkitektur:
 * **Auth**: Placeholder Bearer-token-sjekk. OAuth 2.0 + DCR (#117)
   bygges separat og kobles inn her via middleware.
 * **Tool-handlere**: gjenbrukes 1:1 fra stdio-serveren (``server.py``).
-  Begge entry-points serverer samme 17 verktøy mot samme backend.
+  Begge entry-points serverer samme 25 verktøy mot samme backend.
 
 Lokal kjøring (uten TLS, kun for utvikling):
 
@@ -39,7 +39,6 @@ import contextlib
 import logging
 import os
 import sys
-from collections.abc import AsyncIterator
 from typing import Any
 
 from . import __version__

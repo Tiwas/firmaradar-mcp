@@ -65,8 +65,8 @@ class TestHealth:
         assert payload["status"] == "ok"
         assert payload["service"] == "firmaradar-mcp-remote"
         assert payload["transport"] == "streamable-http"
-        # 17 tools per v0.2-katalogen
-        assert payload["tools_count"] == 17
+        # 25 tools per v0.3-katalogen (17 v0.1/v0.2 + 8 markedsplass-utvidelser)
+        assert payload["tools_count"] == 25
         assert payload["backend"] == "https://firmaradar.no"
 
     async def test_health_exposes_version(self, client):

@@ -73,7 +73,7 @@ class GetRiskScoreBulkOutput(BaseModel):
     meta: BulkMeta = Field(
         ...,
         alias="_meta",
-        description="Aggregert tellestatus for hele bulk-kallet.",
+        description="Aggregate count status for the whole bulk call.",
     )
 
 

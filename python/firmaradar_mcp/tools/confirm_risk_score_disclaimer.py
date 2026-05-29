@@ -76,22 +76,22 @@ class ConfirmRiskScoreDisclaimerInput(BaseModel):
 
 
 class ConfirmRiskScoreDisclaimerOutput(BaseModel):
-    confirmed: bool = Field(description="True hvis disclaimer er bekreftet for brukeren.")
-    version: str = Field(description="Disclaimer-versjon som ble bekreftet (f.eks. 'v1').")
+    confirmed: bool = Field(description="True if the disclaimer is confirmed for the user.")
+    version: str = Field(description="Disclaimer version that was confirmed (e.g. 'v1').")
     confirmed_at: str | None = Field(
         default=None,
-        description="ISO-timestamp for bekreftelsen.",
+        description="ISO timestamp of the confirmation.",
     )
     confirmed_by_user_id: int = Field(
-        description="ID-en til Firmaradar-brukeren bekreftelsen er registrert mot."
+        description="ID of the Firmaradar user the confirmation is registered against."
     )
     audit_id: int | None = Field(
         default=None,
-        description="ID for audit-raden i ``extension_kundebekreftelse_event``.",
+        description="ID of the audit row in ``extension_kundebekreftelse_event``.",
     )
     idempotent: bool = Field(
         default=False,
-        description="True hvis bekreftelsen eksisterte fra før (ingen ny rad skrevet).",
+        description="True if the confirmation already existed (no new row written).",
     )
     raw: dict[str, Any] | None = None
 
@@ -126,22 +126,21 @@ async def handle(
 HANDLER = ToolHandler(
     name="firmaradar_confirm_risk_score_disclaimer",
     description=(
-        "Bekreft pre-screening-disclaimer for firmaradar_get_risk_score. "
-        "Dette er en éngangs-bekreftelse per Firmaradar-bruker (ikke per "
-        "agent eller per kall). Bekreftelsen er permanent og audit-"
-        "loggføres. Krever at OAuth-token er knyttet til en bruker som "
-        "har risikoscoring aktivert i sin pakke. Hvis bruker allerede "
-        "har bekreftet, returnerer endpoint eksisterende confirmation "
-        "(idempotent — samme audit_id returneres). "
-        "Bekreftelsen erklærer at risikoscoring kun brukes til legitime "
-        "formål (KYC, kredittvurdering-pre-screening, due diligence, "
-        "leverandørscreening) og IKKE som erstatning for formell "
-        "kredittvurdering eller automatisert negativ beslutning. "
-        "Disclaimer-tekst og versjon er innebygd i denne tool-en og "
-        "sendes til backend som en eksplisitt streng-match — for å "
-        "unngå at agenten kan bekrefte en versjon den ikke har sett. "
-        "Kall denne tool-en bare når brukeren eksplisitt har gitt deg "
-        "instruksjon om å bekrefte disclaimeren på deres vegne."
+        "Confirm the pre-screening disclaimer required by "
+        "firmaradar_get_risk_score. This is a one-time confirmation per "
+        "Firmaradar user (not per agent and not per call); it is permanent "
+        "and audit-logged. Requires an OAuth token tied to a user whose "
+        "plan has risk scoring enabled. Idempotent — if the user has "
+        "already confirmed, the existing confirmation is returned (same "
+        "audit_id). The confirmation declares that risk scoring is used "
+        "only for legitimate purposes (KYC, credit pre-screening, due "
+        "diligence, supplier screening) and NOT as a substitute for a "
+        "formal credit assessment or an automated adverse decision. The "
+        "disclaimer text and version are embedded in this tool and sent to "
+        "the backend as an explicit string match, so an agent cannot "
+        "confirm a version it has not seen. Call this tool only when the "
+        "user has explicitly instructed you to confirm the disclaimer on "
+        "their behalf."
     ),
     input_schema=ConfirmRiskScoreDisclaimerInput,
     output_schema=ConfirmRiskScoreDisclaimerOutput,
