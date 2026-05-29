@@ -3,10 +3,10 @@
 Paginated list of all Norwegian companies in a given NACE-code (or
 prefix), with optional size/location filters.
 
-Backend status: **GAP** — needs
-``GET /api/v1/nace/<code>/companies?status=…&kommune=…&limit=…&cursor=…``
-backed by indexed lookup on ``naeringskode_1`` in ``enheter``/
-``hovedenheter``. See ``plans/MCP_V01_INVENTORY.md`` tool #14.
+Backed by ``GET /api/v1/nace/<code>/companies`` (indexed lookup on
+``naeringskode_1`` in ``hovedenheter``). The route also applies an
+SN2007→EU heuristic fallback and a "valid-but-unused code" note — see
+``_route_api_v1_nace_companies`` in ``routes_mcp_v1.py``.
 """
 
 from __future__ import annotations

@@ -132,7 +132,7 @@ async def handle(
         ]
         omsetninger.sort(key=lambda t: t[1], reverse=True)
         if omsetninger and omsetninger[0][1]:
-            summary = f"Største omsetning (driftsinntekter) {latest_year}: {omsetninger[0][0]} ({int(omsetninger[0][1]):,} NOK)"
+            summary = f"Highest revenue (driftsinntekter / operating income) {latest_year}: {omsetninger[0][0]} ({int(omsetninger[0][1]):,} NOK)"
 
     return CompareCompaniesOutput(
         orgnrs=params.orgnrs,

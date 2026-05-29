@@ -22,9 +22,15 @@ class GetCompanyAnnouncementsInput(BaseModel):
 
 class Announcement(BaseModel):
     dato: str = Field(description="ISO 8601 date (YYYY-MM-DD).")
-    kunngjoring_type: str = Field(description="Raw BRREG label, e.g. 'Konkursåpning'.")
+    kunngjoring_type: str = Field(
+        description="Raw BRREG label, e.g. 'Konkursåpning' (bankruptcy opening)."
+    )
     category: str = Field(
-        description="Normalised category: 'konkurs', 'fusjon', 'fisjon', 'eierbytte', 'aarsregnskap', ..."
+        description=(
+            "Normalised Norwegian category: 'konkurs' (bankruptcy), 'fusjon' "
+            "(merger), 'fisjon' (demerger), 'eierbytte' (change of ownership), "
+            "'aarsregnskap' (annual accounts), ..."
+        )
     )
     hendelse_type: str | None = None
     navn: str | None = None

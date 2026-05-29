@@ -22,7 +22,11 @@ from . import ToolHandler
 class SearchAnnouncementsInput(BaseModel):
     type: str | None = Field(
         default=None,
-        description="Kunngjøring type/category: konkurs, fusjon, fisjon, eierbytte, ...",
+        description=(
+            "Kunngjøring (announcement) type/category. Values are Norwegian: "
+            "konkurs (bankruptcy), fusjon (merger), fisjon (demerger), "
+            "eierbytte (change of ownership), ..."
+        ),
     )
     from_date: str | None = Field(default=None, description="ISO date — inclusive lower bound.")
     to_date: str | None = Field(default=None, description="ISO date — inclusive upper bound.")

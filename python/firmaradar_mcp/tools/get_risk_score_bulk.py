@@ -48,7 +48,10 @@ class BulkRiskScoreResult(BaseModel):
     score: float | None = None
     risk_level: str | None = Field(
         default=None,
-        description="One of: lav, moderat, høy, kritisk. None on error.",
+        description=(
+            "Norwegian risk level — one of: lav (low), moderat (moderate), "
+            "høy (high), kritisk (critical). None on error."
+        ),
     )
     error: str | None = Field(
         default=None,

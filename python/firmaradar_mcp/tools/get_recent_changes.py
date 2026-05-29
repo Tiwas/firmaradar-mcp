@@ -29,7 +29,11 @@ class GetRecentChangesInput(BaseModel):
     days: int = Field(default=90, ge=1, le=365)
     category: str | None = Field(
         default=None,
-        description="Optional kunngjøring-category filter (konkurs, fusjon, eierbytte, ...).",
+        description=(
+            "Optional kunngjøring (announcement) category filter. Values are "
+            "Norwegian: konkurs (bankruptcy), fusjon (merger), eierbytte "
+            "(change of ownership), ..."
+        ),
     )
 
 

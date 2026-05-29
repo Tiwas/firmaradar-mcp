@@ -48,9 +48,9 @@ class BulkFivResult(BaseModel):
     status: str | None = Field(
         default=None,
         description=(
-            "FIV-status hvis tilgjengelig: not_distressed, distressed, "
-            "insufficient_data, exempt_young_company, "
-            "not_distressed_partial. Fraværende hvis error er satt."
+            "FIV (foretak i vanskeligheter / company-in-difficulty) status "
+            "when available: not_distressed, distressed, insufficient_data, "
+            "exempt_young_company, not_distressed_partial. Absent when error is set."
         ),
     )
     error: str | None = Field(

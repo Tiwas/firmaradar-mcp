@@ -32,7 +32,12 @@ class RiskComponent(BaseModel):
 class GetRiskScoreOutput(BaseModel):
     orgnr: str
     score: float = Field(description="Risk score on the 0-100 scale (higher = riskier).")
-    level: str = Field(description="One of: lav, moderat, høy, kritisk.")
+    level: str = Field(
+        description=(
+            "Norwegian risk level — one of: lav (low), moderat (moderate), "
+            "høy (high), kritisk (critical)."
+        )
+    )
     components: list[RiskComponent] = Field(default_factory=list)
     sources: list[str] = Field(default_factory=list)
     data_gaps: list[str] = Field(default_factory=list)

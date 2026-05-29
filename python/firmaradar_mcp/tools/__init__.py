@@ -51,6 +51,7 @@ from . import (  # noqa: E402
     check_foretak_i_vanskeligheter,
     compare_companies,
     confirm_risk_score_disclaimer,
+    convert_nok,
     find_related_companies,
     get_aml_score,
     get_company,
@@ -108,6 +109,8 @@ ALL_TOOLS: list[ToolHandler] = [
     # ── Bulk-portfolio-screening (#134, 2026-05-27) (2) ──
     check_fiv_bulk.HANDLER,
     get_risk_score_bulk.HANDLER,
+    # ── i18n: valuta-konvertering (2026-05-29) (1) ──
+    convert_nok.HANDLER,
 ]
 
 
@@ -151,6 +154,7 @@ TOOL_TITLES: dict[str, str] = {
     "firmaradar_confirm_risk_score_disclaimer": "Confirm Risk-Score Disclaimer",
     "firmaradar_check_fiv_bulk": "Bulk Check Companies in Difficulty (FIV)",
     "firmaradar_get_risk_score_bulk": "Bulk Company Risk Scores",
+    "firmaradar_convert_nok": "Convert NOK to Foreign Currency",
 }
 
 # Tools that mutate state (not read-only). Everything else is a pure lookup and
