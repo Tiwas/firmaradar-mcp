@@ -147,6 +147,83 @@ class TestBearerAuth:
             )
         assert resp.status_code == 200
 
+    def test_body_is_discovery_only_logic(self):
+        """Discovery-whitelist: kun initialize/tools/list/ping/notifications
+        slipper gjennom uten auth; tools/call + tom/ugyldig body krever auth."""
+        import json
+        from firmaradar_mcp.remote_server import _body_is_discovery_only as d
+
+        assert d(json.dumps({"jsonrpc": "2.0", "id": 1, "method": "tools/list"}).encode())
+        assert d(json.dumps({"jsonrpc": "2.0", "id": 1, "method": "initialize"}).encode())
+        assert d(json.dumps({"method": "notifications/initialized"}).encode())
+        # batch av kun discovery-metoder
+        assert d(json.dumps([{"method": "initialize"}, {"method": "tools/list"}]).encode())
+        # tools/call → krever auth
+        assert not d(json.dumps({"jsonrpc": "2.0", "id": 1, "method": "tools/call",
+                                 "params": {"name": "x"}}).encode())
+        # batch med ETT ikke-discovery-kall → krever auth
+        assert not d(json.dumps([{"method": "tools/list"}, {"method": "tools/call"}]).encode())
+        # fail-closed: tom / ugyldig JSON / manglende method
+        assert not d(b"")
+        assert not d(b"not json")
+        assert not d(json.dumps({"jsonrpc": "2.0", "id": 1}).encode())
+
+    async def test_tools_list_without_auth_passes(self):
+        """Uautentisert tools/list slipper gjennom (directory-scannere kan
+        introspektere verktøy-skjemaene uten OAuth)."""
+        _skip_if_no_remote_deps()
+        from firmaradar_mcp.remote_server import _build_auth_middleware
+        from starlette.applications import Starlette
+        from starlette.middleware import Middleware
+        from starlette.routing import Route
+        from starlette.responses import JSONResponse
+        import httpx
+        from httpx import ASGITransport
+
+        async def _ok(request):
+            return JSONResponse({"reached": True})
+
+        app = Starlette(
+            routes=[Route("/mcp/", endpoint=_ok, methods=["POST"])],
+            middleware=[Middleware(_build_auth_middleware())],
+        )
+        transport = ASGITransport(app=app)
+        async with httpx.AsyncClient(transport=transport, base_url="http://t") as ac:
+            resp = await ac.post(
+                "/mcp/", json={"jsonrpc": "2.0", "id": 1, "method": "tools/list"}
+            )
+        assert resp.status_code == 200
+        assert resp.json() == {"reached": True}
+
+    async def test_tools_call_without_auth_blocked(self):
+        """Uautentisert tools/call MÅ avvises (401) — dataene forblir gated
+        selv om discovery er åpen."""
+        _skip_if_no_remote_deps()
+        from firmaradar_mcp.remote_server import _build_auth_middleware
+        from starlette.applications import Starlette
+        from starlette.middleware import Middleware
+        from starlette.routing import Route
+        from starlette.responses import JSONResponse
+        import httpx
+        from httpx import ASGITransport
+
+        async def _ok(request):
+            return JSONResponse({"reached": True})
+
+        app = Starlette(
+            routes=[Route("/mcp/", endpoint=_ok, methods=["POST"])],
+            middleware=[Middleware(_build_auth_middleware())],
+        )
+        transport = ASGITransport(app=app)
+        async with httpx.AsyncClient(transport=transport, base_url="http://t") as ac:
+            resp = await ac.post(
+                "/mcp/",
+                json={"jsonrpc": "2.0", "id": 1, "method": "tools/call",
+                      "params": {"name": "firmaradar_get_company", "arguments": {}}},
+            )
+        assert resp.status_code == 401
+        assert resp.json()["error"] == "missing_authorization"
+
     async def test_health_check_bypasses_auth(self, client):
         # Selv om vi sender en ugyldig Authorization-header skal /health
         # alltid svare 200 (load-balancere må kunne hit'e den uten cred).

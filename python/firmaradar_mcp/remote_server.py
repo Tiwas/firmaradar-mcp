@@ -102,6 +102,79 @@ def _extract_session_id(scope, headers) -> str | None:
     return None
 
 
+# MCP-metoder som er trygge å eksponere UTEN auth: ren discovery/handshake
+# som ikke rører kundedata. Verktøy-skjemaene er allerede offentlige
+# (README, Official MCP Registry, Glama, public GitHub). ``tools/call`` er
+# bevisst IKKE her — verktøy-KALL krever fortsatt OAuth siden de henter data.
+# Dette lar directory-scannere (Cursor, PulseMCP, Glama connectors) og klienter
+# introspektere verktøy-listen før innlogging.
+_PUBLIC_MCP_METHODS = frozenset({
+    "initialize",
+    "notifications/initialized",
+    "notifications/cancelled",
+    "ping",
+    "tools/list",
+    "prompts/list",
+    "resources/list",
+    "resources/templates/list",
+})
+
+
+def _body_is_discovery_only(body: bytes) -> bool:
+    """Returner True hvis JSON-RPC-bodyen KUN inneholder offentlige discovery-
+    metoder (:data:`_PUBLIC_MCP_METHODS`).
+
+    Fail-closed: tom body, ugyldig JSON, manglende ``method``, ikke-dict-item,
+    eller ENHVER metode utenfor whitelisten → ``False`` (krever auth). Et
+    JSON-RPC-batch tillates kun hvis ALLE metodene er offentlige.
+    """
+    if not body:
+        return False
+    try:
+        import json as _json
+        data = _json.loads(body)
+    except Exception:  # noqa: BLE001 — ugyldig JSON → krev auth
+        return False
+    items = data if isinstance(data, list) else [data]
+    if not items:
+        return False
+    for it in items:
+        if not isinstance(it, dict):
+            return False
+        method = it.get("method")
+        if not isinstance(method, str) or method not in _PUBLIC_MCP_METHODS:
+            return False
+    return True
+
+
+async def _buffer_asgi_body(receive):
+    """Les hele ASGI-request-bodyen og returner ``(body_bytes, replay_receive)``.
+
+    ``replay_receive`` gjenspiller de bufrede meldingene slik at downstream-
+    appen kan lese bodyen på nytt. Nødvendig fordi vi må inspisere JSON-RPC-
+    metoden i middleware FØR vi avgjør om requesten slipper gjennom.
+    """
+    messages: list[dict] = []
+    body = b""
+    while True:
+        message = await receive()
+        messages.append(message)
+        if message["type"] == "http.request":
+            body += message.get("body", b"")
+            if not message.get("more_body", False):
+                break
+        else:
+            # http.disconnect e.l. — stopp buffering
+            break
+
+    async def replay():
+        if messages:
+            return messages.pop(0)
+        return await receive()
+
+    return body, replay
+
+
 def _build_auth_middleware():
     """Returner en Starlette ASGI-middleware som autentiserer Bearer +
     cacher session-tokens for follow-up-requests uten Bearer.
@@ -198,7 +271,21 @@ def _build_auth_middleware():
                 await self.app(scope, receive, send)
                 return
 
-            # Ingen Bearer + ingen kjent session → 401.
+            # Ingen Bearer + ingen kjent session. Tillat uautentisert
+            # DISCOVERY (initialize, tools/list, ping, notifications) slik at
+            # directory-scannere (Cursor, PulseMCP, Glama) og klienter kan
+            # introspektere verktøy-skjemaene FØR innlogging. tools/call
+            # forblir gated (krever OAuth) — vi inspiserer JSON-RPC-metoden
+            # i bodyen og slipper kun gjennom whitelistede discovery-metoder.
+            buffered_body, replay = await _buffer_asgi_body(receive)
+            if _body_is_discovery_only(buffered_body):
+                # Ingen api_key settes — discovery-handlere (list_tools)
+                # trenger den ikke; ev. tools/call på samme session blir
+                # avvist her (ikke discovery-only) → 401.
+                await self.app(scope, replay, send)
+                return
+
+            # Ikke-discovery uten auth → 401.
             # RFC 9728 § 5.1: resource_metadata-parameter peker klienten
             # til discovery-endepunktet slik at den vet hvilken auth-
             # server som beskytter ressursen.
@@ -221,7 +308,7 @@ def _build_auth_middleware():
                     ),
                 },
             )
-            await response(scope, receive, send)
+            await response(scope, replay, send)
 
     return BearerAuthMiddleware
 
