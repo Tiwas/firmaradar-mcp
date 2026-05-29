@@ -80,7 +80,7 @@ Hent API-nøkkel: **[firmaradar.no/min-side/api-keys](https://firmaradar.no/min-
 
 ## Verktøykatalog
 
-17 verktøy, alle med samme oppsett i Python (`firmaradar-mcp` på PyPI) og TypeScript (`@firmaradar/mcp-server` på npm):
+25 verktøy. Python-pakka (`firmaradar-mcp` på PyPI) og remote-serveren (`mcp.firmaradar.no`) eksponerer alle 25; TypeScript-pakka (`@firmaradar/mcp-server` på npm) dekker foreløpig de 17 opprinnelige:
 
 ### Selskaps-oppslag
 - `firmaradar_search_companies` — søk på navn eller orgnr
@@ -100,12 +100,22 @@ Hent API-nøkkel: **[firmaradar.no/min-side/api-keys](https://firmaradar.no/min-
 
 ### KYC og AML
 - `firmaradar_check_aml_pep` — full AML/PEP-screening med sanksjonslister og revisjonsspor
+- `firmaradar_get_aml_score` — strukturert AML-risikoscore (0–100) med faktor-breakdown og revisjonsspor
 
 ### Bransje og overvåkning
 - `firmaradar_list_companies_in_nace` — alle selskaper i en NACE-kode med geografisk filter
 - `firmaradar_get_recent_changes` — endringer siste N dager for et orgnr
 - `firmaradar_search_announcements` — fritekst-søk i BRREG-kunngjøringer
 - `firmaradar_compare_companies` — sammenlikne flere selskaper side om side
+
+### Risiko, FIV og konsern
+- `firmaradar_get_risk_score` — transparent selskaps-risikoscore (0–100) med komponent-breakdown
+- `firmaradar_get_risk_score_bulk` — risikoscore for en portefølje orgnr i ett kall
+- `firmaradar_check_foretak_i_vanskeligheter` — lovbestemt «foretak i vanskeligheter» (FIV)-vurdering
+- `firmaradar_check_fiv_bulk` — FIV-status for en portefølje orgnr i ett kall
+- `firmaradar_get_konsernstotte` — offentlig støtte gjennom konsernet (tre-struktur)
+- `firmaradar_get_skattelister` — skattelistedata (inntekt, formue, skatt) for selskap
+- `firmaradar_confirm_risk_score_disclaimer` — bekreft pre-screening-disclaimer før risk-score-verktøyene
 
 Full API-referanse og eksempel-prompter: **[firmaradar.no/dokumentasjon](https://firmaradar.no/dokumentasjon)**
 
