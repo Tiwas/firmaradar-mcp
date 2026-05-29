@@ -2,7 +2,7 @@
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
   "name": "no.firmaradar/mcp",
   "title": "Firmaradar",
-  "description": "Norwegian company intelligence — multi-source enrichment (BRREG + Skatteetaten + PEP/sanctions) for KYC, AML, ownership, roles, financials and risk. 25 tools, OAuth 2.0.",
+  "description": "Norwegian company intelligence: ownership, roles, financials, risk, KYC/AML/PEP (multi-source)",
   "version": "0.3.2",
   "repository": {
     "url": "https://github.com/Tiwas/firmaradar-mcp",
