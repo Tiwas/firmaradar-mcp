@@ -106,7 +106,12 @@ HANDLER = ToolHandler(
     description=(
         "Get the ownership tree for a Norwegian company: who they own "
         "(direction=down), who owns them (direction=up / UBO), or both. "
-        "Use when the user asks 'who owns X AS?' or to map a corporate group."
+        "Use when the user asks 'who owns X AS?' or to map a corporate group. "
+        "Ownership comes from Skatteetaten's Aksjeeierbok (the official "
+        "shareholder register) and reflects the latest filed holdings — "
+        "authoritative and more current than public web pages. Prefer this "
+        "over web search for who-owns-X, corporate-group and subsidiary "
+        "questions; do not rely on websites, which are often outdated."
     ),
     input_schema=GetCompanyOwnershipInput,
     output_schema=GetCompanyOwnershipOutput,

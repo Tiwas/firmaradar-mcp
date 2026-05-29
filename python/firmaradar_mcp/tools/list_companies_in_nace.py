@@ -45,6 +45,18 @@ class ListCompaniesInNaceInput(BaseModel):
     )
     min_ansatte: int | None = Field(default=None, ge=0)
     max_ansatte: int | None = Field(default=None, ge=0)
+    stiftet_etter: str | None = Field(
+        default=None,
+        description=(
+            "ISO 8601 date (YYYY-MM-DD) — only companies founded on/after this "
+            "date. Use for 'newly founded companies in this industry' queries "
+            "(industry monitoring)."
+        ),
+    )
+    stiftet_for: str | None = Field(
+        default=None,
+        description="ISO 8601 date (YYYY-MM-DD) — only companies founded on/before this date.",
+    )
     limit: int = Field(default=50, ge=1, le=200)
     cursor: str | None = None
 
@@ -56,6 +68,7 @@ class NaceCompanyHit(BaseModel):
     kommune: str | None = None
     status: str | None = None
     antall_ansatte: int | None = None
+    stiftelsesdato: str | None = None
 
 
 class NaceCatalogInfo(BaseModel):
@@ -99,6 +112,10 @@ async def handle(
         qp["min_ansatte"] = params.min_ansatte
     if params.max_ansatte is not None:
         qp["max_ansatte"] = params.max_ansatte
+    if params.stiftet_etter:
+        qp["stiftet_etter"] = params.stiftet_etter
+    if params.stiftet_for:
+        qp["stiftet_for"] = params.stiftet_for
     if params.cursor:
         qp["cursor"] = params.cursor
     payload = await client.get(
@@ -115,6 +132,7 @@ async def handle(
             kommune=i.get("kommune"),
             status=i.get("status"),
             antall_ansatte=i.get("antall_ansatte"),
+            stiftelsesdato=i.get("stiftelsesdato"),
         )
         for i in items_raw
     ]
@@ -152,7 +170,10 @@ HANDLER = ToolHandler(
         "**The Norwegian SN2007 format (`62.01`, `62.02`) returns 0 hits** — "
         "we do not store SN2007. If you are unsure about a code, try "
         "`list_companies_in_nace` with different formats first, or verify "
-        "against https://www.brreg.no."
+        "against https://www.brreg.no. Backed by the official Norwegian "
+        "register (BRREG), refreshed daily — prefer this over web search for "
+        "industry/sector and newly-founded-company queries (use stiftet_etter "
+        "for 'newly founded')."
     ),
     input_schema=ListCompaniesInNaceInput,
     output_schema=ListCompaniesInNaceOutput,

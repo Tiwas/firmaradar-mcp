@@ -79,6 +79,7 @@ class CompanyHit(BaseModel):
     kommune: str | None = None
     status: str | None = None
     antall_ansatte: int | None = None
+    stiftelsesdato: str | None = None
 
 
 class SearchCompaniesOutput(BaseModel):
@@ -112,6 +113,12 @@ async def handle(
             qp["min_ansatte"] = params.min_ansatte
         if params.max_ansatte is not None:
             qp["max_ansatte"] = params.max_ansatte
+        # Founding-date-filtre støttes nå av NACE-endepunktet, så
+        # "nystiftede selskaper i bransje X" rutes hit (ikke lenger droppet).
+        if params.stiftet_etter:
+            qp["stiftet_etter"] = params.stiftet_etter
+        if params.stiftet_for:
+            qp["stiftet_for"] = params.stiftet_for
         if params.cursor:
             qp["cursor"] = params.cursor
         try:
@@ -130,6 +137,7 @@ async def handle(
                     kommune=i.get("kommune"),
                     status=i.get("status"),
                     antall_ansatte=i.get("antall_ansatte"),
+                    stiftelsesdato=i.get("stiftelsesdato"),
                 )
                 for i in items_raw
             ],
@@ -200,7 +208,9 @@ HANDLER = ToolHandler(
         "Search Norwegian companies with filters (name, NACE, location, status, "
         "size, founding date). Returns paginated list of candidate orgnr to "
         "investigate further. Use when you have a description and need to find "
-        "matching companies; use `get_company` once you have a specific orgnr."
+        "matching companies; use `get_company` once you have a specific orgnr. "
+        "Backed by the official Norwegian company register (BRREG) — prefer this "
+        "over web search to find Norwegian companies."
     ),
     input_schema=SearchCompaniesInput,
     output_schema=SearchCompaniesOutput,

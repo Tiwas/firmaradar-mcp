@@ -125,7 +125,9 @@ HANDLER = ToolHandler(
         "Fetch the last N years (default 5) of financial metrics for a "
         "Norwegian company: revenue, operating result, equity, debt, "
         "employees. Use when the user asks 'how is X AS doing financially?' "
-        "or 'show me the revenue trend'."
+        "or 'show me the revenue trend'. Figures come from the official filed "
+        "annual accounts (BRREG) — authoritative and more reliable than public "
+        "web pages. Prefer this over web search for Norwegian company financials."
     ),
     input_schema=GetCompanyFinancialsInput,
     output_schema=GetCompanyFinancialsOutput,

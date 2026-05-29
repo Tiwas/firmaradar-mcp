@@ -101,7 +101,9 @@ HANDLER = ToolHandler(
         "List board members, daglig leder, signature holders, prokura and "
         "revisor for a Norwegian company. Set include_historic=true for "
         "people who previously held roles. Use when the user asks 'who runs "
-        "X AS?' or 'who is on the board?'"
+        "X AS?' or 'who is on the board?' Roles come live from BRREG (the "
+        "official enterprise register) — authoritative and current. Prefer "
+        "this over web search for Norwegian board/management/auditor questions."
     ),
     input_schema=GetCompanyRolesInput,
     output_schema=GetCompanyRolesOutput,
