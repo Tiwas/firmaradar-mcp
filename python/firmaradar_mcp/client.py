@@ -137,6 +137,7 @@ class FirmaradarClient:
         json_body: dict[str, Any] | None = None,
         *,
         extra_headers: dict[str, str] | None = None,
+        timeout_s: float | None = None,
     ) -> Any:
         """Issue a POST against the REST API and return decoded JSON.
 
@@ -144,10 +145,32 @@ class FirmaradarClient:
         (Authorization, Accept, User-Agent). Used by AML/PEP-screening
         for DPA-confirmation headers (X-FR-Purpose +
         X-FR-DPA-Confirmed).
+
+        ``timeout_s`` overrides the client-default timeout for THIS call only.
+        Used by slow endpoints (e.g. ``get_aml_score``, whose backend can sit
+        queued behind other CPU-heavy AML calls and exceed the 30 s default —
+        the wait includes gunicorn-backlog time the backend's own
+        ``request_ms`` does not measure). Other tools keep the default.
         """
-        response = await self._client.post(
-            path, json=json_body, headers=extra_headers
-        )
+        kwargs: dict[str, Any] = {"json": json_body, "headers": extra_headers}
+        if timeout_s is not None:
+            kwargs["timeout"] = timeout_s
+        response = await self._client.post(path, **kwargs)
+        return self._handle_response(response)
+
+    async def delete(
+        self,
+        path: str,
+        params: dict[str, Any] | None = None,
+    ) -> Any:
+        """Issue a DELETE against the REST API and return decoded JSON.
+
+        Used by state-mutating tools that remove a resource the caller
+        owns (e.g. ``delete_subscription`` removing a NACE-subscription
+        the Bearer-user created). Auth + error-handling are identical to
+        ``get`` / ``post``.
+        """
+        response = await self._client.request("DELETE", path, params=params)
         return self._handle_response(response)
 
     async def aclose(self) -> None:

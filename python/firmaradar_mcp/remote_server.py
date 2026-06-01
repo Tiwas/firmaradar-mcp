@@ -45,8 +45,47 @@ from . import __version__
 from .client import ClientConfig, FirmaradarClient
 from .server import build_server
 from .tools import ALL_TOOLS
+from ._token_validation import TokenStatus, TokenValidator
 
 _LOG = logging.getLogger("firmaradar_mcp.remote_server")
+
+# RFC 9728 § 5.1: ``resource_metadata`` peker klienten til discovery-
+# endepunktet (/.well-known/oauth-protected-resource) slik at den vet
+# hvilken authorization-server som beskytter ressursen — Claude bruker
+# dette til å starte OAuth-flyten på nytt.
+_RESOURCE_METADATA_URL = (
+    "https://mcp.firmaradar.no/.well-known/oauth-protected-resource"
+)
+_WWW_AUTH_MISSING = (
+    f'Bearer realm="firmaradar-mcp", resource_metadata="{_RESOURCE_METADATA_URL}"'
+)
+_WWW_AUTH_INVALID = (
+    'Bearer realm="firmaradar-mcp", error="invalid_token", '
+    f'resource_metadata="{_RESOURCE_METADATA_URL}"'
+)
+
+# ChatGPT-spesifikk re-auth-trigger.
+#
+# OpenAI sin connector-klient reagerer IKKE på et bart HTTP 401 +
+# WWW-Authenticate under et tools/call (bekreftet av OpenAI support) —
+# den krever et JSON-RPC verktøy-resultat (HTTP 200) med isError=true og
+# _meta["mcp/www_authenticate"] som inneholder både error og
+# error_description. Da viser ChatGPT en inline "Connect"-flyt; uten det
+# degraderer den til en tekst-melding ("reconnect i innstillinger").
+#
+# Claude bruker derimot HTTP 401-stien (verifisert i prod). Vi beholder den
+# for alle ikke-ChatGPT-klienter; for ChatGPT slipper vi i stedet det døde
+# tokenet videre til verktøy-laget, som bygger _meta-challengen (selve
+# challenge-strengen lever i ``server.py``: ``_REAUTH_WWW_AUTHENTICATE``).
+def _is_chatgpt_client(headers) -> bool:
+    """True hvis requesten kommer fra OpenAI sin MCP-connector-klient.
+
+    OpenAI sender ``User-Agent: openai-mcp/<versjon>`` (ev. med tillegg).
+    Vi matcher på substring ``openai-mcp`` for å være robust mot
+    versjons-/suffiks-endringer.
+    """
+    ua = (headers.get("user-agent") or "").lower()
+    return "openai-mcp" in ua
 
 
 def _configure_logging() -> None:
@@ -175,26 +214,47 @@ async def _buffer_asgi_body(receive):
     return body, replay
 
 
-def _build_auth_middleware():
-    """Returner en Starlette ASGI-middleware som autentiserer Bearer +
-    cacher session-tokens for follow-up-requests uten Bearer.
+def _build_auth_middleware(validator: TokenValidator):
+    """Returner en Starlette ASGI-middleware som validerer Bearer proaktivt
+    + cacher session-tokens for follow-up-requests uten Bearer.
 
-    v0.1: tokenet brukes direkte som Firmaradar API-key (kunden lager
-    en API-key i portalen og limer den inn i Claude-connector-UI-en).
+    Tokenet er enten et OAuth-utstedt delegate-token (Claude Web/Mobile via
+    consent-flyten) eller en rå Firmaradar API-key limt rett inn som Bearer
+    (Cursor/Codex/Desktop/curl). I begge tilfeller resolver backend tokenet
+    likt — og ``validator`` (se :mod:`._token_validation`) sjekker liveness
+    mot firmaradar_web sitt ``/oauth/introspect`` FØR vi gir kontroll til
+    transporten.
 
-    v0.2 (#117): OAuth 2.0 + DCR. Tokenet er da et opaque access-token
-    som vi slår opp mot ``oauth_token``-tabellen for å finne den
-    tilknyttede API-key-en. Samme middleware fortsetter å fungere —
-    bare lookup-strategien endres.
+    Hvorfor proaktivt: streamable-HTTP-transporten committer HTTP 200 så
+    snart den streamer JSON-RPC-svaret. Et 401 fra et verktøykall havner da
+    inni ``CallToolResult(isError=True)`` og Claude ser aldri en ekte HTTP
+    401 → tilbyr aldri ny innlogging. Ved å sjekke tokenet her kan vi svare
+    en **ekte** HTTP 401 + ``WWW-Authenticate`` som trigger re-auth.
 
     Flyt:
-      1. POST /mcp/ med Bearer → token settes på scope + cachet hvis
-         response inkluderer ny session-id
-      2. POST /mcp/<session-id> uten Bearer → resolve token fra cache
-         via session-id i path/header
-      3. Ingen Bearer + ingen kjent session → 401
+      1. POST /mcp/ med Bearer → valider; gyldig → token settes på scope +
+         caches per session. Definitivt ugyldig (401/403 fra introspect) →
+         HTTP 401 + WWW-Authenticate. Transient feil → fail-open.
+      2. POST /mcp/<session-id> uten Bearer → resolve token fra cache,
+         re-valider (cached) slik at midt-i-sesjon-revokering også gir 401.
+      3. Ingen Bearer + ingen kjent session → discovery slipper gjennom,
+         alt annet → 401.
     """
     from starlette.responses import JSONResponse
+
+    def _reauth_response() -> JSONResponse:
+        """HTTP 401 som ber Claude starte OAuth-re-auth (RFC 9728 § 5.1)."""
+        return JSONResponse(
+            {
+                "error": "invalid_token",
+                "error_description": (
+                    "Access token expired, revoked or unknown. "
+                    "Re-authenticate via OAuth."
+                ),
+            },
+            status_code=401,
+            headers={"WWW-Authenticate": _WWW_AUTH_INVALID},
+        )
     from starlette.types import ASGIApp, Receive, Scope, Send
 
     class BearerAuthMiddleware:
@@ -224,50 +284,54 @@ def _build_auth_middleware():
             token = _extract_bearer_token(headers)
             session_id = _extract_session_id(scope, headers)
 
-            # Bearer på request → resolve mot OAuth-store (eller pass-through
-            # for direkte API-key-flow), cache for fremtidige session-follow-
-            # ups, og videresend til MCP-handler.
+            # Bearer på request → valider liveness proaktivt, cache for
+            # fremtidige session-follow-ups, og videresend til MCP-handler.
             if token:
-                from . import oauth_shim
-                api_key = oauth_shim.resolve_bearer_to_api_key(token)
-                if api_key is None:
-                    # Tokenet er utløpt eller ukjent — krev re-auth.
-                    # RFC 9728 § 5.1: WWW-Authenticate MÅ inkludere
-                    # resource_metadata-parameter slik at klienten kan
-                    # discovery'e auth-server via /.well-known/oauth-
-                    # protected-resource.
-                    response = JSONResponse(
-                        {
-                            "error": "invalid_token",
-                            "error_description": (
-                                "Access token expired or unknown. "
-                                "Refresh via OAuth or re-paste API-key."
-                            ),
-                        },
-                        status_code=401,
-                        headers={
-                            "WWW-Authenticate": (
-                                'Bearer realm="firmaradar-mcp", '
-                                'error="invalid_token", '
-                                'resource_metadata="https://mcp.firmaradar.no/.well-known/oauth-protected-resource"'
-                            ),
-                        },
-                    )
-                    await response(scope, receive, send)
+                status = await validator.validate(token)
+                if status is TokenStatus.INVALID:
+                    # Definitivt dødt token (introspect ga 401/403) — krev
+                    # re-auth. Evict ev. cachet session-mapping så et nytt
+                    # kall ikke resolver det døde tokenet på nytt.
+                    validator.invalidate(token)
+                    if session_id:
+                        _session_tokens.pop(session_id, None)
+                    # ChatGPT reagerer ikke på HTTP 401 under tools/call — den
+                    # trenger et JSON-RPC _meta-resultat (se _CHATGPT_WWW_AUTH_
+                    # CHALLENGE). Slipp det døde tokenet videre til verktøy-
+                    # laget: backend svarer 401 og _call_tool pakker det i et
+                    # CallToolResult med _meta["mcp/www_authenticate"]. Vi
+                    # cacher IKKE det døde tokenet på session.
+                    if _is_chatgpt_client(headers):
+                        scope.setdefault("state", {})["api_key"] = token
+                        await self.app(scope, receive, send)
+                        return
+                    await _reauth_response()(scope, receive, send)
                     return
-                scope.setdefault("state", {})["api_key"] = api_key
+                # VALID eller UNKNOWN (transient → fail-open): slipp gjennom.
+                # Ved UNKNOWN forblir backend siste skanse — en web-hikke
+                # skal ikke logge ut alle MCP-brukere.
+                scope.setdefault("state", {})["api_key"] = token
                 if session_id:
-                    _session_tokens[session_id] = api_key
+                    _session_tokens[session_id] = token
                 # Wrap send for å snappe session-id fra response-headers
                 # (initialize-respons inneholder Mcp-Session-Id-header med
                 # ny session-id som klient så bruker på follow-ups).
-                wrapped_send = _make_session_capturing_send(send, api_key)
+                wrapped_send = _make_session_capturing_send(send, token)
                 await self.app(scope, receive, wrapped_send)
                 return
 
             # Ingen Bearer — slå opp token fra session-cache
             if session_id and session_id in _session_tokens:
-                scope.setdefault("state", {})["api_key"] = _session_tokens[session_id]
+                cached_token = _session_tokens[session_id]
+                # Re-valider også cachede session-tokens slik at et token som
+                # blir revoked MIDT i en sesjon også trigger ny innlogging.
+                status = await validator.validate(cached_token)
+                if status is TokenStatus.INVALID:
+                    validator.invalidate(cached_token)
+                    _session_tokens.pop(session_id, None)
+                    await _reauth_response()(scope, receive, send)
+                    return
+                scope.setdefault("state", {})["api_key"] = cached_token
                 await self.app(scope, receive, send)
                 return
 
@@ -294,19 +358,13 @@ def _build_auth_middleware():
                     "error": "missing_authorization",
                     "message": (
                         "Send 'Authorization: Bearer <token>' header. "
-                        "v0.1: token = Firmaradar API-key. "
-                        "v0.2: token = OAuth-issued access-token. "
-                        "Follow-up requests gjenkjennes via Mcp-Session-Id-"
-                        "header eller /mcp/<session-id>-path."
+                        "Token = OAuth-issued access-token eller Firmaradar "
+                        "API-key. Follow-up requests gjenkjennes via "
+                        "Mcp-Session-Id-header eller /mcp/<session-id>-path."
                     ),
                 },
                 status_code=401,
-                headers={
-                    "WWW-Authenticate": (
-                        'Bearer realm="firmaradar-mcp", '
-                        'resource_metadata="https://mcp.firmaradar.no/.well-known/oauth-protected-resource"'
-                    ),
-                },
+                headers={"WWW-Authenticate": _WWW_AUTH_MISSING},
             )
             await response(scope, replay, send)
 
@@ -385,6 +443,13 @@ def create_app(
         "FIRMARADAR_API_BASE_URL", "https://firmaradar.no"
     )
 
+    # Token-validator for proaktiv liveness-sjekk (se ._token_validation).
+    # Foretrekk intern docker-nett-URL (http://firmaradar_web:8000) for å
+    # unngå unødig round-trip ut via Cloudflare/nginx; fall tilbake til den
+    # offentlige api_base hvis env ikke er satt (f.eks. lokal kjøring).
+    introspect_base = os.environ.get("FIRMARADAR_INTERNAL_WEB_URL") or api_base
+    validator = TokenValidator(web_base_url=introspect_base)
+
     # Bygg MCP-server-instans EN gang per process. Tool-handlerne lever
     # uavhengig av client-objektet siden vi injiserer per-request client
     # via context-var (se _wrapped_call_tool nedenfor).
@@ -424,9 +489,12 @@ def create_app(
             path: str,
             json_body: dict | None = None,
             extra_headers: dict[str, str] | None = None,
+            *,
+            timeout_s: float | None = None,
         ) -> Any:
             return await self._resolve().post(
                 path, json_body=json_body, extra_headers=extra_headers,
+                timeout_s=timeout_s,
             )
 
         @property
@@ -476,60 +544,21 @@ def create_app(
             finally:
                 await dispatcher.aclose()
 
-    # OAuth 2.0 + DCR-shim for Anthropic Claude Web/Mobile-klienter (#117)
-    from . import oauth_shim
-
+    # NB: OAuth 2.0 + DCR (discovery, /oauth/register, /oauth/authorize,
+    # /oauth/mcp-consent, /oauth/token, /oauth/introspect) håndteres av
+    # firmaradar_web — nginx ruter /.well-known/oauth-*, /oauth/ og
+    # /register på mcp.firmaradar.no dit (se nginx.conf + portal/
+    # routes_oauth_mcp.py). Den tidligere in-memory ``oauth_shim`` i denne
+    # containeren er fjernet (2026-05-31): den var død kode i prod og en
+    # parallell-implementasjon som kunne drifte ut av sync med web-flyten.
     return Starlette(
         debug=False,
         routes=[
             Route("/health", endpoint=health, methods=["GET"]),
-            # OAuth discovery (RFC 9728 + RFC 8414)
-            Route(
-                "/.well-known/oauth-protected-resource",
-                endpoint=oauth_shim.well_known_protected_resource,
-                methods=["GET"],
-            ),
-            # Claude prøver også /.well-known/oauth-protected-resource/mcp/<session-id>
-            Route(
-                "/.well-known/oauth-protected-resource/{path:path}",
-                endpoint=oauth_shim.well_known_protected_resource,
-                methods=["GET"],
-            ),
-            Route(
-                "/.well-known/oauth-authorization-server",
-                endpoint=oauth_shim.well_known_authorization_server,
-                methods=["GET"],
-            ),
-            # OAuth endpoints — registrer både /oauth/register (vår
-            # canonical) og /register (Claude probet denne direkte i
-            # 2026-05-26-loggene uten å lese discovery).
-            Route(
-                "/oauth/register",
-                endpoint=oauth_shim.oauth_register,
-                methods=["POST"],
-                name="oauth_register",
-            ),
-            Route(
-                "/register",
-                endpoint=oauth_shim.oauth_register,
-                methods=["POST"],
-            ),
-            Route(
-                "/oauth/authorize",
-                endpoint=oauth_shim.oauth_authorize,
-                methods=["GET", "POST"],
-                name="oauth_authorize",
-            ),
-            Route(
-                "/oauth/token",
-                endpoint=oauth_shim.oauth_token,
-                methods=["POST"],
-                name="oauth_token",
-            ),
             # MCP streamable-HTTP-transport
             Mount("/mcp", app=handle_mcp),
         ],
-        middleware=[Middleware(_build_auth_middleware())],
+        middleware=[Middleware(_build_auth_middleware(validator))],
         lifespan=_lifespan,
     )
 

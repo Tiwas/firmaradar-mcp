@@ -52,9 +52,12 @@ from . import (  # noqa: E402
     compare_companies,
     confirm_risk_score_disclaimer,
     convert_nok,
+    delete_subscription,
     find_related_companies,
+    get_aml_report,
     get_aml_score,
     get_company,
+    start_aml_report,
     get_company_announcements,
     get_company_financials,
     get_company_ownership,
@@ -67,11 +70,13 @@ from . import (  # noqa: E402
     get_recent_changes,
     get_risk_score,
     get_risk_score_bulk,
-    get_skattelister,
     list_companies_in_nace,
+    list_my_subscriptions,
+    list_nace_codes,
     search_announcements,
     search_companies,
     search_persons,
+    subscribe_nace,
 )
 
 
@@ -98,12 +103,14 @@ ALL_TOOLS: list[ToolHandler] = [
     compare_companies.HANDLER,
     # Tverr-søk (1)
     search_announcements.HANDLER,
-    # ── v0.3 markedsplass-utvidelser (#130, 2026-05-27) (5) ──
+    # ── v0.3 markedsplass-utvidelser (#130, 2026-05-27) (4) ──
     get_risk_score.HANDLER,
     check_foretak_i_vanskeligheter.HANDLER,
     get_aml_score.HANDLER,
     get_konsernstotte.HANDLER,
-    get_skattelister.HANDLER,
+    # ── AML-rapport async-sti (AML_SCORE_PERF_PLAN.md §8, 2026-05-31) (2) ──
+    start_aml_report.HANDLER,
+    get_aml_report.HANDLER,
     # ── v0.3 compliance-helpers (#134, 2026-05-27) (1) ──
     confirm_risk_score_disclaimer.HANDLER,
     # ── Bulk-portfolio-screening (#134, 2026-05-27) (2) ──
@@ -111,6 +118,11 @@ ALL_TOOLS: list[ToolHandler] = [
     get_risk_score_bulk.HANDLER,
     # ── i18n: valuta-konvertering (2026-05-29) (1) ──
     convert_nok.HANDLER,
+    # ── NACE-overvåkning v0.5 — agent-eksponering (2026-05-31) (4) ──
+    list_nace_codes.HANDLER,
+    subscribe_nace.HANDLER,
+    list_my_subscriptions.HANDLER,
+    delete_subscription.HANDLER,
 ]
 
 
@@ -149,21 +161,46 @@ TOOL_TITLES: dict[str, str] = {
     "firmaradar_get_risk_score": "Get Company Risk Score",
     "firmaradar_check_foretak_i_vanskeligheter": "Check Company in Difficulty (FIV)",
     "firmaradar_get_aml_score": "Get Company AML Risk Score",
+    "firmaradar_start_aml_report": "Start AML Report (Async)",
+    "firmaradar_get_aml_report": "Get AML Report Status / Result",
     "firmaradar_get_konsernstotte": "Get Group Support (Konsernstøtte)",
-    "firmaradar_get_skattelister": "Get Tax List Data",
     "firmaradar_confirm_risk_score_disclaimer": "Confirm Risk-Score Disclaimer",
     "firmaradar_check_fiv_bulk": "Bulk Check Companies in Difficulty (FIV)",
     "firmaradar_get_risk_score_bulk": "Bulk Company Risk Scores",
     "firmaradar_convert_nok": "Convert NOK to Foreign Currency",
+    "firmaradar_list_nace_codes": "Search NACE Industry Codes",
+    "firmaradar_subscribe_nace": "Subscribe to Industry Monitoring (NACE)",
+    "firmaradar_list_my_subscriptions": "List My Industry Subscriptions",
+    "firmaradar_delete_subscription": "Delete Industry Subscription",
 }
 
 # Tools that mutate state (not read-only). Everything else is a pure lookup and
-# is advertised with ``readOnlyHint=True``. ``confirm_risk_score_disclaimer``
-# writes a consent/audit record (``extension_kundebekreftelse_event``), so it is
-# the one tool advertised with ``readOnlyHint=False``.
+# is advertised with ``readOnlyHint=True``.
+#
+# * ``confirm_risk_score_disclaimer`` writes a consent/audit record
+#   (``extension_kundebekreftelse_event``).
+# * ``subscribe_nace`` upserts a NACE industry-monitoring subscription.
+# * ``delete_subscription`` removes one (see ``DESTRUCTIVE_TOOLS``).
 WRITE_TOOLS: frozenset[str] = frozenset({
     "firmaradar_confirm_risk_score_disclaimer",
+    "firmaradar_subscribe_nace",
+    "firmaradar_delete_subscription",
+})
+
+# Tools that perform a destructive update (remove a resource). Advertised with
+# ``destructiveHint=True`` so agent clients can prompt for confirmation. Only
+# ``delete_subscription`` qualifies — it removes a user-owned monitoring
+# subscription (reversible only by re-subscribing). All other write-tools are
+# additive/idempotent upserts and stay ``destructiveHint=False``.
+DESTRUCTIVE_TOOLS: frozenset[str] = frozenset({
+    "firmaradar_delete_subscription",
 })
 
 
-__all__ = ["ALL_TOOLS", "ToolHandler", "TOOL_TITLES", "WRITE_TOOLS"]
+__all__ = [
+    "ALL_TOOLS",
+    "ToolHandler",
+    "TOOL_TITLES",
+    "WRITE_TOOLS",
+    "DESTRUCTIVE_TOOLS",
+]

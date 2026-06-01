@@ -16,6 +16,29 @@ import os
 
 import pytest
 
+from firmaradar_mcp._token_validation import TokenStatus
+
+
+class _StubValidator:
+    """Test-validator som returnerer en fast :class:`TokenStatus`.
+
+    Lar middleware-testene kjøre deterministisk uten å treffe nettverket
+    (den ekte ``TokenValidator`` kaller /oauth/introspect over HTTP).
+    """
+
+    def __init__(self, status) -> None:
+        self.status = status
+        self.invalidated: list[str] = []
+
+    async def validate(self, token):  # noqa: ANN001
+        return self.status
+
+    def invalidate(self, token):  # noqa: ANN001
+        self.invalidated.append(token)
+
+    async def aclose(self):
+        pass
+
 
 def _skip_if_no_remote_deps():
     try:
@@ -65,8 +88,13 @@ class TestHealth:
         assert payload["status"] == "ok"
         assert payload["service"] == "firmaradar-mcp-remote"
         assert payload["transport"] == "streamable-http"
-        # 26 tools (17 v0.1/v0.2 + 8 markedsplass-utvidelser + 1 valuta-konvertering)
-        assert payload["tools_count"] == 26
+        # tools_count skal speile registeret. IKKE hardkod tallet — det
+        # endres når verktøy legges til/fjernes (gikk 26→30→32 i mai 2026).
+        # test_smoke eier den eksakte navnelista; her sjekker vi kun at
+        # /health rapporterer samme antall som ALL_TOOLS faktisk har.
+        from firmaradar_mcp.tools import ALL_TOOLS
+        assert payload["tools_count"] == len(ALL_TOOLS)
+        assert payload["tools_count"] > 0
         assert payload["backend"] == "https://firmaradar.no"
 
     async def test_health_exposes_version(self, client):
@@ -110,7 +138,7 @@ class TestBearerAuth:
 
         app = Starlette(
             routes=[Route("/mcp/", endpoint=_ok, methods=["POST"])],
-            middleware=[Middleware(_build_auth_middleware())],
+            middleware=[Middleware(_build_auth_middleware(_StubValidator(TokenStatus.VALID)))],
         )
         transport = ASGITransport(app=app)
         async with httpx.AsyncClient(transport=transport, base_url="http://t") as ac:
@@ -137,7 +165,7 @@ class TestBearerAuth:
 
         app = Starlette(
             routes=[Route("/mcp/", endpoint=_ok, methods=["POST"])],
-            middleware=[Middleware(_build_auth_middleware())],
+            middleware=[Middleware(_build_auth_middleware(_StubValidator(TokenStatus.VALID)))],
         )
         transport = ASGITransport(app=app)
         async with httpx.AsyncClient(transport=transport, base_url="http://t") as ac:
@@ -185,7 +213,7 @@ class TestBearerAuth:
 
         app = Starlette(
             routes=[Route("/mcp/", endpoint=_ok, methods=["POST"])],
-            middleware=[Middleware(_build_auth_middleware())],
+            middleware=[Middleware(_build_auth_middleware(_StubValidator(TokenStatus.VALID)))],
         )
         transport = ASGITransport(app=app)
         async with httpx.AsyncClient(transport=transport, base_url="http://t") as ac:
@@ -212,7 +240,7 @@ class TestBearerAuth:
 
         app = Starlette(
             routes=[Route("/mcp/", endpoint=_ok, methods=["POST"])],
-            middleware=[Middleware(_build_auth_middleware())],
+            middleware=[Middleware(_build_auth_middleware(_StubValidator(TokenStatus.VALID)))],
         )
         transport = ASGITransport(app=app)
         async with httpx.AsyncClient(transport=transport, base_url="http://t") as ac:

@@ -2,7 +2,7 @@
 
 These tests verify that:
 
-* The 26-tool registry imports and exposes all expected names.
+* The 32-tool registry imports and exposes all expected names.
 * Every tool has a user-friendly title and accurate MCP
   ``ToolAnnotations`` (readOnlyHint etc.) — required by the connector
   directories.
@@ -52,12 +52,14 @@ EXPECTED_TOOL_NAMES = {
     "firmaradar_compare_companies",
     # Tverr-søk (1)
     "firmaradar_search_announcements",
-    # v0.3 markedsplass-utvidelser (#130) (5)
+    # v0.3 markedsplass-utvidelser (#130) (4)
     "firmaradar_get_risk_score",
     "firmaradar_check_foretak_i_vanskeligheter",
     "firmaradar_get_aml_score",
     "firmaradar_get_konsernstotte",
-    "firmaradar_get_skattelister",
+    # AML-rapport async-sti (§8) (2)
+    "firmaradar_start_aml_report",
+    "firmaradar_get_aml_report",
     # v0.3 compliance-helper (#134) (1)
     "firmaradar_confirm_risk_score_disclaimer",
     # v0.3 bulk-portfolio-screening (#134) (2)
@@ -65,13 +67,18 @@ EXPECTED_TOOL_NAMES = {
     "firmaradar_get_risk_score_bulk",
     # i18n: valuta-konvertering (1)
     "firmaradar_convert_nok",
+    # NACE-overvåkning v0.5 — agent-eksponering (4)
+    "firmaradar_list_nace_codes",
+    "firmaradar_subscribe_nace",
+    "firmaradar_list_my_subscriptions",
+    "firmaradar_delete_subscription",
 }
 
 
 def test_registry_lists_all_tools() -> None:
     names = {tool.name for tool in ALL_TOOLS}
     assert names == EXPECTED_TOOL_NAMES, names.symmetric_difference(EXPECTED_TOOL_NAMES)
-    assert len(ALL_TOOLS) == 26
+    assert len(ALL_TOOLS) == 32
 
 
 def test_every_tool_has_description_and_schemas() -> None:
@@ -95,13 +102,21 @@ def test_every_tool_has_user_friendly_title() -> None:
         assert title != name, f"{name} bør ha en lesbar tittel, ikke selve verktøynavnet"
 
 
-def test_exactly_the_disclaimer_tool_is_a_write_tool() -> None:
-    """Bare disclaimer-bekreftelsen skriver state; alt annet er rene oppslag."""
-    from firmaradar_mcp.tools import WRITE_TOOLS
+def test_write_and_destructive_tool_sets() -> None:
+    """Skrive-verktøyene er disclaimer-bekreftelse + NACE-abonnement-mutasjoner;
+    kun ``delete_subscription`` er destruktiv. Alt annet er rene oppslag."""
+    from firmaradar_mcp.tools import DESTRUCTIVE_TOOLS, WRITE_TOOLS
 
     names = {tool.name for tool in ALL_TOOLS}
-    assert WRITE_TOOLS == {"firmaradar_confirm_risk_score_disclaimer"}
+    assert WRITE_TOOLS == {
+        "firmaradar_confirm_risk_score_disclaimer",
+        "firmaradar_subscribe_nace",
+        "firmaradar_delete_subscription",
+    }
     assert WRITE_TOOLS <= names, WRITE_TOOLS - names
+    # Destruktive verktøy er en delmengde av skrive-verktøyene.
+    assert DESTRUCTIVE_TOOLS == {"firmaradar_delete_subscription"}
+    assert DESTRUCTIVE_TOOLS <= WRITE_TOOLS, DESTRUCTIVE_TOOLS - WRITE_TOOLS
 
 
 def test_list_tools_advertises_titles_and_annotations() -> None:
@@ -109,7 +124,7 @@ def test_list_tools_advertises_titles_and_annotations() -> None:
     hvert verktøy: ``readOnlyHint=True`` for oppslag, ``False`` for skrive-
     verktøy, aldri destruktivt."""
     from firmaradar_mcp import server
-    from firmaradar_mcp.tools import WRITE_TOOLS
+    from firmaradar_mcp.tools import DESTRUCTIVE_TOOLS, WRITE_TOOLS
 
     for handler in ALL_TOOLS:
         tool = server._handler_to_tool(handler)
@@ -121,7 +136,10 @@ def test_list_tools_advertises_titles_and_annotations() -> None:
         assert ann.readOnlyHint is expected_read_only, (
             f"{tool.name}: readOnlyHint skal være {expected_read_only}"
         )
-        assert ann.destructiveHint is False, f"{tool.name} skal ikke være destruktivt"
+        expected_destructive = tool.name in DESTRUCTIVE_TOOLS
+        assert ann.destructiveHint is expected_destructive, (
+            f"{tool.name}: destructiveHint skal være {expected_destructive}"
+        )
         assert ann.idempotentHint is True, f"{tool.name} skal være idempotent"
 
 
@@ -327,8 +345,76 @@ def _placeholder_for(field_name: str) -> object:
         return "role-aaaaaaaaaaaaaaaaaaaaaaaa"
     if field_name == "code":
         return "47.11"
+    if field_name == "nace_code":
+        return "47.110"
+    if field_name == "subscription_id":
+        return 1
     if field_name == "via":
         return "person"
     if field_name == "entity_type":
         return "company"
     return "placeholder"
+
+
+# ── Regresjon: timeout_s-videresending (innført + fikset 2026-05-30) ──────────
+# get_aml_score er det eneste tunge verktøyet og fikk en per-kall timeout på
+# 60s (stopgap mot kø-timeout under batch). Plumbingen går tool → client.post →
+# _DispatchingClient.post → FirmaradarClient.post → httpx. _DispatchingClient
+# ble først deployet UTEN timeout_s-param → ALLE get_aml_score-kall feilet med
+# 'unexpected keyword argument timeout_s'. Disse låser kontrakten på hvert lag.
+
+async def test_get_aml_score_passes_timeout_s_to_client() -> None:
+    from firmaradar_mcp.tools.get_aml_score import (
+        handle, GetAmlScoreInput, AML_SCORE_TIMEOUT_S,
+    )
+    captured: dict = {}
+
+    class _FakeClient:
+        async def post(self, path, json_body=None, *, extra_headers=None, timeout_s=None):
+            captured["timeout_s"] = timeout_s
+            return {"orgnr": "923609016", "score": 25, "level": "low", "rapport": {}}
+
+    await handle(_FakeClient(), GetAmlScoreInput(orgnr="923609016", purpose="manual"))
+    assert captured["timeout_s"] == AML_SCORE_TIMEOUT_S
+    assert AML_SCORE_TIMEOUT_S >= 60.0
+
+
+async def test_firmaradar_client_post_forwards_timeout_s(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv(ENV_API_KEY, "test-key")
+    from firmaradar_mcp.client import FirmaradarClient
+
+    client = FirmaradarClient()
+    captured: dict = {}
+
+    async def fake_httpx_post(path, **kwargs):
+        captured.update(kwargs)
+        return object()
+
+    client._client.post = fake_httpx_post
+    client._handle_response = lambda resp: {}
+    try:
+        # Med timeout_s → per-kall timeout settes
+        await client.post("/x", json_body={"a": 1}, timeout_s=60.0)
+        assert captured.get("timeout") == 60.0
+        # Uten timeout_s → ingen per-kall timeout (bruker klient-default)
+        captured.clear()
+        await client.post("/y", json_body={})
+        assert "timeout" not in captured
+    finally:
+        await client.aclose()
+
+
+def test_dispatching_client_forwards_timeout_s() -> None:
+    """Regresjon: _DispatchingClient.post må VIDERESENDE timeout_s til den
+    underliggende FirmaradarClient (closure-lokal klasse → source-sjekk, samme
+    mønster som test_no_tool_uses_json_kwarg_on_client_post)."""
+    import pathlib
+    from firmaradar_mcp import remote_server
+
+    src = pathlib.Path(remote_server.__file__).read_text(encoding="utf-8")
+    assert "timeout_s=timeout_s" in src, (
+        "_DispatchingClient.post videresender ikke timeout_s — "
+        "get_aml_score vil feile med TypeError før HTTP-kallet"
+    )

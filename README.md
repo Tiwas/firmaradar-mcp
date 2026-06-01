@@ -114,7 +114,6 @@ Hent API-nøkkel: **[firmaradar.no/min-side/api-keys](https://firmaradar.no/min-
 - `firmaradar_check_foretak_i_vanskeligheter` — lovbestemt «foretak i vanskeligheter» (FIV)-vurdering
 - `firmaradar_check_fiv_bulk` — FIV-status for en portefølje orgnr i ett kall
 - `firmaradar_get_konsernstotte` — offentlig støtte gjennom konsernet (tre-struktur)
-- `firmaradar_get_skattelister` — skattelistedata (inntekt, formue, skatt) for selskap
 - `firmaradar_confirm_risk_score_disclaimer` — bekreft pre-screening-disclaimer før risk-score-verktøyene
 
 Full API-referanse og eksempel-prompter: **[firmaradar.no/dokumentasjon](https://firmaradar.no/dokumentasjon)**

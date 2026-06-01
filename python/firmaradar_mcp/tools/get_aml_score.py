@@ -20,6 +20,15 @@ from pydantic import BaseModel, Field
 from ..client import FirmaradarClient
 from . import ToolHandler
 
+# Stopgap-timeout (2026-05-30): aml/score er det eneste tunge verktøyet. Backend
+# enkeltkall er ~17-21 s, men under batch-screening (agent kjører flere store
+# selskaper raskt) kan et kall kø i gunicorn-backloggen bak andre CPU-tunge
+# AML-kall og overstige 30 s-defaulten i vegg-klokke (kø + prosessering) — selv
+# om backend-prosesseringen er under 30 s. Hever timeouten KUN for dette
+# verktøyet til 60 s; alle andre verktøy beholder 30 s. Se
+# plans/arkitektur/AML_SCORE_PERF_PLAN.md §7 (async-sti = varig fiks).
+AML_SCORE_TIMEOUT_S: float = 60.0
+
 
 class GetAmlScoreInput(BaseModel):
     orgnr: str = Field(description="9-digit norwegian organization number.")
@@ -33,6 +42,7 @@ class GetAmlScoreInput(BaseModel):
 
 class AmlFactor(BaseModel):
     id: str
+    name: str | None = None
     weight: int
     triggered: bool
     details: str | None = None
@@ -56,6 +66,7 @@ async def handle(
     payload = await client.post(
         "/api/v1/aml/score",
         json_body={"orgnr": params.orgnr, "purpose": params.purpose},
+        timeout_s=AML_SCORE_TIMEOUT_S,
     )
     if not isinstance(payload, dict):
         payload = {}
@@ -65,11 +76,17 @@ async def handle(
     for f in factors_raw:
         if not isinstance(f, dict):
             continue
+        # Backend-indikatorene bruker nøkkelen `name` + `trigger` (ikke `id`/
+        # `triggered`). Tidligere leste vi feil nøkler → `id` alltid "" og
+        # `triggered` alltid False (enhver high-risk score så ut som «ingenting
+        # trigget»). Les begge med fallback for bakoverkompatibilitet.
+        name = f.get("name")
         factors.append(
             AmlFactor(
-                id=str(f.get("id", "")),
+                id=str(f.get("id") or name or ""),
+                name=name,
                 weight=int(f.get("weight", 0) or 0),
-                triggered=bool(f.get("triggered", False)),
+                triggered=bool(f.get("trigger", f.get("triggered", False))),
                 details=f.get("details"),
             )
         )

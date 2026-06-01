@@ -25,7 +25,7 @@ from mcp.server.stdio import stdio_server
 from pydantic import BaseModel
 
 from .client import FirmaradarClient, FirmaradarClientError
-from .tools import ALL_TOOLS, TOOL_TITLES, WRITE_TOOLS, ToolHandler
+from .tools import ALL_TOOLS, DESTRUCTIVE_TOOLS, TOOL_TITLES, WRITE_TOOLS, ToolHandler
 
 
 _LOG = logging.getLogger("firmaradar_mcp.server")
@@ -34,7 +34,7 @@ _LOG = logging.getLogger("firmaradar_mcp.server")
 # Holdes stabilt på tvers av versjoner så bruker ikke får "ny server"-prompt
 # ved hver oppgradering.
 _SERVER_NAME = "firmaradar-mcp"
-_SERVER_VERSION = "0.3.2"
+_SERVER_VERSION = "0.5.0"
 
 
 def _configure_logging() -> None:
@@ -115,7 +115,9 @@ def _handler_to_tool(handler: ToolHandler) -> types.Tool:
     * ``readOnlyHint`` — ``True`` for alle rene oppslag; ``False`` for verktøy i
       :data:`~firmaradar_mcp.tools.WRITE_TOOLS` (skriver state, f.eks.
       disclaimer-bekreftelse).
-    * ``destructiveHint`` — alltid ``False``; ingen verktøy sletter/ødelegger.
+    * ``destructiveHint`` — ``True`` for verktøy i
+      :data:`~firmaradar_mcp.tools.DESTRUCTIVE_TOOLS` (fjerner en ressurs,
+      f.eks. ``delete_subscription``); ``False`` for alle andre.
     * ``idempotentHint`` — ``True``; gjentatte kall gir samme effekt.
     * ``openWorldHint`` — ``True`` for oppslag (data speiler eksterne norske
       registre, og noen kall treffer BRREG live); ``False`` for den interne
@@ -139,6 +141,7 @@ def _handler_to_tool(handler: ToolHandler) -> types.Tool:
     """
     title = TOOL_TITLES.get(handler.name, handler.name)
     read_only = handler.name not in WRITE_TOOLS
+    destructive = handler.name in DESTRUCTIVE_TOOLS
     return types.Tool(
         name=handler.name,
         title=title,
@@ -148,10 +151,13 @@ def _handler_to_tool(handler: ToolHandler) -> types.Tool:
         annotations=types.ToolAnnotations(
             title=title,
             readOnlyHint=read_only,
-            destructiveHint=False,
+            destructiveHint=destructive,
             idempotentHint=True,
             openWorldHint=read_only,
         ),
+        # securitySchemes — OpenAI Apps SDK krever dette + runtime-_meta for
+        # ChatGPT inline re-auth. Top-level extra-felt; ignoreres av Claude.
+        securitySchemes=_TOOL_SECURITY_SCHEMES,
     )
 
 
@@ -175,21 +181,63 @@ def _result_to_text_content(result: Any) -> list[types.TextContent]:
     )]
 
 
-def _error_result(payload: dict[str, Any]) -> types.CallToolResult:
+# ── Re-auth-signal for ChatGPT (OpenAI MCP-connector) ──────────────────
+# ChatGPT viser sin inline re-auth-UI under et tools/call KUN når selve
+# verktøy-resultatet bærer ``_meta["mcp/www_authenticate"]`` med både
+# ``error`` og ``error_description`` (bekreftet av OpenAI support 2026-03;
+# et bart HTTP 401 holder ikke for ChatGPT slik det gjør for Claude).
+#
+# Vi legger derfor denne challenge-en på ALLE 401-feilresultater fra
+# backend. ``_meta`` er namespaced og ignoreres av klienter som ikke
+# forstår den (Claude/Cursor/Desktop), så det er trygt på tvers — Claude
+# fortsetter å bruke HTTP-401-stien fra ``remote_server``-middlewaren.
+# ``resource_metadata`` peker til vår RFC 9728-discovery.
+_REAUTH_RESOURCE_METADATA_URL = (
+    "https://mcp.firmaradar.no/.well-known/oauth-protected-resource"
+)
+_REAUTH_WWW_AUTHENTICATE = (
+    f'Bearer resource_metadata="{_REAUTH_RESOURCE_METADATA_URL}", '
+    'error="invalid_token", '
+    'error_description="Firmaradar-tilgang utløpt eller tilbakekalt — '
+    'logg inn på nytt."'
+)
+_REAUTH_META: dict[str, Any] = {"mcp/www_authenticate": [_REAUTH_WWW_AUTHENTICATE]}
+
+# Per-verktøy securitySchemes — OpenAI Apps SDK krever dette i tillegg til
+# runtime-``_meta`` for at ChatGPT sin inline re-auth-UI skal trigges. MCP-
+# SDK 1.27 sin ``Tool`` har ``extra="allow"``, så et top-level
+# ``securitySchemes``-felt (det navnet OpenAI dokumenterer) serialiseres
+# rent. Ikke et standard MCP-felt → ignoreres av Claude/Cursor.
+_TOOL_SECURITY_SCHEMES: list[dict[str, Any]] = [
+    {"type": "oauth2", "scopes": ["mcp"]},
+]
+
+
+def _error_result(
+    payload: dict[str, Any],
+    *,
+    meta: dict[str, Any] | None = None,
+) -> types.CallToolResult:
     """Bygg et MCP-feilsvar (``isError=True``) fra en feil-payload.
 
     Returnerer en ``CallToolResult`` slik at SDK-en tar den as-is (early
     return) og *ikke* kjører ``outputSchema``-validering — feilsvar matcher
     aldri suksess-skjemaet, og ``isError=True`` er korrekt MCP-semantikk så
     klienter kan skille feil fra gyldige resultater.
+
+    ``meta`` legges på som ``_meta`` på resultatet — brukes til å bære
+    ``mcp/www_authenticate``-challenge-en på 401-feil (ChatGPT re-auth).
     """
-    return types.CallToolResult(
-        content=[types.TextContent(
+    kwargs: dict[str, Any] = {
+        "content": [types.TextContent(
             type="text",
             text=json.dumps(payload, ensure_ascii=False),
         )],
-        isError=True,
-    )
+        "isError": True,
+    }
+    if meta is not None:
+        kwargs["_meta"] = meta
+    return types.CallToolResult(**kwargs)
 
 
 def build_server(tools: list[ToolHandler], client: FirmaradarClient) -> Server:
@@ -238,14 +286,21 @@ def build_server(tools: list[ToolHandler], client: FirmaradarClient) -> Server:
                 "details": str(exc),
             })
         except FirmaradarClientError as exc:
-            return _error_result({
-                "error": "Firmaradar API error",
-                "tool": name,
-                "status_code": exc.status_code,
-                "error_code": exc.error_code,
-                "details": str(exc),
-                "retry_after_s": exc.retry_after_s,
-            })
+            # 401 fra backend = dødt/utløpt token. Bær re-auth-challenge i
+            # ``_meta`` så ChatGPT viser sin inline innloggings-UI (Claude
+            # håndteres allerede av HTTP-401-stien i middlewaren).
+            reauth_meta = _REAUTH_META if exc.status_code == 401 else None
+            return _error_result(
+                {
+                    "error": "Firmaradar API error",
+                    "tool": name,
+                    "status_code": exc.status_code,
+                    "error_code": exc.error_code,
+                    "details": str(exc),
+                    "retry_after_s": exc.retry_after_s,
+                },
+                meta=reauth_meta,
+            )
         except Exception as exc:  # noqa: BLE001
             _LOG.exception("Tool %s raised", name)
             return _error_result({

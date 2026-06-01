@@ -54,7 +54,10 @@ class AmlPepHit(BaseModel):
     entitet_type: str | None = None
     kilder: list[str] = Field(default_factory=list)
     match_ratio: float
-    match_type: str
+    match_type: str  # "eksakt" | "fuzzy" | "contains"
+    # "contains" = weak network match (name contains the query keyword), NOT a
+    # confirmed same-entity hit — verify manually, never treat as authoritative.
+    weak_match: bool = False
     ekstern_id: str | None = None
 
 
@@ -63,6 +66,10 @@ class CheckAmlPepOutput(BaseModel):
     query_birth_year: int | None = None
     hits: list[AmlPepHit]
     hit_count: int
+    # True when the query was < 5 chars: only exact/fuzzy was run (no substring
+    # discovery). A zero hit_count then does NOT confirm the name is clean.
+    query_too_short: bool = False
+    note: str | None = None
 
 
 async def handle(

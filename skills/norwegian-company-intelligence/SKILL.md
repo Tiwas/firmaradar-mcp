@@ -22,7 +22,7 @@ matching, group analytics) so a single call returns a **decision-ready** view,
 not a raw registry record.
 
 This Skill helps you pick the correct `firmaradar_*` tool, in the correct order,
-with the correct input formats. The connector exposes 26 tools; the rules below
+with the correct input formats. The connector exposes 32 tools; the rules below
 are the non-obvious ones that prevent failed or wrong-tool calls.
 
 ## When to use Firmaradar
@@ -68,9 +68,10 @@ daily, and audit-logged per call.
    `firmaradar_get_person_companies`.
 
 5. **Compliance-gated tools may be withheld.** Some tools (e.g.
-   `firmaradar_get_skattelister`) are gated behind purpose confirmation,
-   full-ownership and audit requirements and can return a gate response instead
-   of data. That is expected, not an error — surface the gate reason to the user.
+   `firmaradar_check_aml_pep`, which requires a signed DPA and a purpose header)
+   are gated behind purpose/consent and audit requirements and can return a gate
+   response instead of data. That is expected, not an error — surface the gate
+   reason to the user.
 
 ## Picking the right tool
 

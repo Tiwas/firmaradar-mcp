@@ -35,16 +35,12 @@ organization number (`orgnr`, 9 digits) or a person identity unless noted.
 
 `get_risk_score` is **company** financial health, not a personal credit score.
 
-## AML / PEP / sanctions / tax
+## AML / PEP / sanctions
 
 | Intent | Tool |
 |---|---|
 | AML + PEP + sanctions screening | `firmaradar_check_aml_pep` |
 | AML score | `firmaradar_get_aml_score` |
-| Tax-list data (gated) | `firmaradar_get_skattelister` |
-
-`get_skattelister` is compliance-gated (purpose + full-ownership + audit) and may
-return a gate response instead of data.
 
 ## People
 
