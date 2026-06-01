@@ -11,6 +11,35 @@ workflow-nodene på samme funksjonalitets-baseline.
 
 ---
 
+## [0.5.1] — 2026-06-01
+
+### Removed
+
+- **`get_skattelister` tool removed.** Skatteetaten denied API access
+  (case SSV-5198) for the underlying tax-list data, and confidential tax
+  data is not disclosable to a third-party service. The tool was
+  marketplace-hidden and compliance-gated (returned 403), so there is no
+  impact on live consumers. The capability may return later via a
+  re-architected, credit-bureau-backed flow.
+
+## [0.5.0] — 2026-06-01
+
+### Added
+
+- New tools: `start_aml_report` / `get_aml_report` (async AML-report
+  path), `list_nace_codes`, `subscribe_nace`, `list_my_subscriptions`,
+  `delete_subscription` (NACE-industry monitoring), and `convert_nok`
+  (NOK → EUR/USD/GBP/SEK/DKK).
+- Tool titles + `ToolAnnotations` (readOnly / destructive / idempotent /
+  openWorld hints) on every tool — required by the connector directories.
+
+### Changed
+
+- **OAuth / reauth hardening.** `mcp_remote` validates the Bearer token
+  proactively against `/oauth/introspect` (fail-open on transient
+  errors); refresh-token TTL is a 30-day sliding window. The legacy
+  `oauth_shim` was removed.
+
 ## [0.3.2] — 2026-05-27
 
 ### Changed
