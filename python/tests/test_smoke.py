@@ -78,7 +78,7 @@ EXPECTED_TOOL_NAMES = {
 def test_registry_lists_all_tools() -> None:
     names = {tool.name for tool in ALL_TOOLS}
     assert names == EXPECTED_TOOL_NAMES, names.symmetric_difference(EXPECTED_TOOL_NAMES)
-    assert len(ALL_TOOLS) == 32
+    assert len(ALL_TOOLS) == 31
 
 
 def test_every_tool_has_description_and_schemas() -> None:
@@ -219,7 +219,7 @@ def test_no_tool_uses_json_kwarg_on_client_post() -> None:
 # Ingen verktøy er lenger *rent* deferred — alle gjør reelle API-kall. Det
 # eneste gjenværende deferrede er én *modus*: ``find_related_companies`` med
 # via=owner (krever UBO-graf-traversal, deferred til v0.3). Den dekkes av den
-# fokuserte testen under; alle 26 verktøy har korrekt handler-signatur.
+# fokuserte testen under; alle 31 verktøy har korrekt handler-signatur.
 async def test_find_related_companies_owner_mode_is_deferred() -> None:
     """``find_related_companies`` er implementert for via=person/address, men
     via=owner er deferred (krever UBO-graf-traversal) og skal raise

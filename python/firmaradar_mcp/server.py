@@ -1,6 +1,6 @@
 """MCP stdio-server entry point.
 
-Boots the Model Context Protocol server, registers all 26 tools, and
+Boots the Model Context Protocol server, registers all 31 tools, and
 runs the stdio event loop. Each tool is implemented as a small
 self-contained module under :mod:`firmaradar_mcp.tools`; this file
 orchestrates registration and dispatch.
