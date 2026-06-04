@@ -177,15 +177,26 @@ TOOL_TITLES: dict[str, str] = {
 # Tools that mutate state (not read-only). Everything else is a pure lookup and
 # is advertised with ``readOnlyHint=True``.
 #
+# * ``check_aml_pep`` writes the legally required per-call AML/PEP audit trail.
+# * ``get_aml_score`` generates an auditable AML report record.
+# * ``start_aml_report`` creates an async AML report job/result record.
 # * ``confirm_risk_score_disclaimer`` writes a consent/audit record
 #   (``extension_kundebekreftelse_event``).
 # * ``subscribe_nace`` upserts a NACE industry-monitoring subscription.
 # * ``delete_subscription`` removes one (see ``DESTRUCTIVE_TOOLS``).
 WRITE_TOOLS: frozenset[str] = frozenset({
+    "firmaradar_check_aml_pep",
+    "firmaradar_get_aml_score",
+    "firmaradar_start_aml_report",
     "firmaradar_confirm_risk_score_disclaimer",
     "firmaradar_subscribe_nace",
     "firmaradar_delete_subscription",
 })
+
+# Tools that can write to public internet state or external third-party
+# systems. Current Firmaradar tools either read source-backed data or mutate
+# private Firmaradar account/compliance state only, so none qualify.
+OPEN_WORLD_TOOLS: frozenset[str] = frozenset()
 
 # Tools that perform a destructive update (remove a resource). Advertised with
 # ``destructiveHint=True`` so agent clients can prompt for confirmation. Only
@@ -202,5 +213,6 @@ __all__ = [
     "ToolHandler",
     "TOOL_TITLES",
     "WRITE_TOOLS",
+    "OPEN_WORLD_TOOLS",
     "DESTRUCTIVE_TOOLS",
 ]

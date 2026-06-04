@@ -25,7 +25,14 @@ from mcp.server.stdio import stdio_server
 from pydantic import BaseModel
 
 from .client import FirmaradarClient, FirmaradarClientError
-from .tools import ALL_TOOLS, DESTRUCTIVE_TOOLS, TOOL_TITLES, WRITE_TOOLS, ToolHandler
+from .tools import (
+    ALL_TOOLS,
+    DESTRUCTIVE_TOOLS,
+    OPEN_WORLD_TOOLS,
+    TOOL_TITLES,
+    WRITE_TOOLS,
+    ToolHandler,
+)
 
 
 _LOG = logging.getLogger("firmaradar_mcp.server")
@@ -119,9 +126,10 @@ def _handler_to_tool(handler: ToolHandler) -> types.Tool:
       :data:`~firmaradar_mcp.tools.DESTRUCTIVE_TOOLS` (fjerner en ressurs,
       f.eks. ``delete_subscription``); ``False`` for alle andre.
     * ``idempotentHint`` — ``True``; gjentatte kall gir samme effekt.
-    * ``openWorldHint`` — ``True`` for oppslag (data speiler eksterne norske
-      registre, og noen kall treffer BRREG live); ``False`` for den interne
-      skrive-operasjonen.
+    * ``openWorldHint`` — ``True`` only for tools that can write to public
+      internet state or external third-party systems. Current Firmaradar tools
+      do not; they read source-backed data or mutate private Firmaradar account
+      state.
 
     Tittel hentes fra :data:`~firmaradar_mcp.tools.TOOL_TITLES`; mangler den
     faller vi tilbake på selve verktøynavnet.
@@ -142,6 +150,7 @@ def _handler_to_tool(handler: ToolHandler) -> types.Tool:
     title = TOOL_TITLES.get(handler.name, handler.name)
     read_only = handler.name not in WRITE_TOOLS
     destructive = handler.name in DESTRUCTIVE_TOOLS
+    open_world = handler.name in OPEN_WORLD_TOOLS
     return types.Tool(
         name=handler.name,
         title=title,
@@ -153,7 +162,7 @@ def _handler_to_tool(handler: ToolHandler) -> types.Tool:
             readOnlyHint=read_only,
             destructiveHint=destructive,
             idempotentHint=True,
-            openWorldHint=read_only,
+            openWorldHint=open_world,
         ),
         # securitySchemes — OpenAI Apps SDK krever dette + runtime-_meta for
         # ChatGPT inline re-auth. Top-level extra-felt; ignoreres av Claude.

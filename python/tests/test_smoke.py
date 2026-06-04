@@ -103,17 +103,24 @@ def test_every_tool_has_user_friendly_title() -> None:
 
 
 def test_write_and_destructive_tool_sets() -> None:
-    """Skrive-verktøyene er disclaimer-bekreftelse + NACE-abonnement-mutasjoner;
-    kun ``delete_subscription`` er destruktiv. Alt annet er rene oppslag."""
-    from firmaradar_mcp.tools import DESTRUCTIVE_TOOLS, WRITE_TOOLS
+    """Skrive-verktøyene muterer privat Firmaradar-state eller audit/report-state.
+
+    ``openWorldHint`` betyr skriveeffekt mot offentlig internett-state eller
+    eksterne tredjepartssystemer, ikke at verktøyet leser eksterne kilder.
+    """
+    from firmaradar_mcp.tools import DESTRUCTIVE_TOOLS, OPEN_WORLD_TOOLS, WRITE_TOOLS
 
     names = {tool.name for tool in ALL_TOOLS}
     assert WRITE_TOOLS == {
+        "firmaradar_check_aml_pep",
+        "firmaradar_get_aml_score",
+        "firmaradar_start_aml_report",
         "firmaradar_confirm_risk_score_disclaimer",
         "firmaradar_subscribe_nace",
         "firmaradar_delete_subscription",
     }
     assert WRITE_TOOLS <= names, WRITE_TOOLS - names
+    assert OPEN_WORLD_TOOLS == frozenset()
     # Destruktive verktøy er en delmengde av skrive-verktøyene.
     assert DESTRUCTIVE_TOOLS == {"firmaradar_delete_subscription"}
     assert DESTRUCTIVE_TOOLS <= WRITE_TOOLS, DESTRUCTIVE_TOOLS - WRITE_TOOLS
@@ -121,10 +128,9 @@ def test_write_and_destructive_tool_sets() -> None:
 
 def test_list_tools_advertises_titles_and_annotations() -> None:
     """``server._handler_to_tool`` skal sette ``title`` + ``ToolAnnotations`` på
-    hvert verktøy: ``readOnlyHint=True`` for oppslag, ``False`` for skrive-
-    verktøy, aldri destruktivt."""
+    hvert verktøy med eksplisitte Apps SDK review-hints."""
     from firmaradar_mcp import server
-    from firmaradar_mcp.tools import DESTRUCTIVE_TOOLS, WRITE_TOOLS
+    from firmaradar_mcp.tools import DESTRUCTIVE_TOOLS, OPEN_WORLD_TOOLS, WRITE_TOOLS
 
     for handler in ALL_TOOLS:
         tool = server._handler_to_tool(handler)
@@ -139,6 +145,10 @@ def test_list_tools_advertises_titles_and_annotations() -> None:
         expected_destructive = tool.name in DESTRUCTIVE_TOOLS
         assert ann.destructiveHint is expected_destructive, (
             f"{tool.name}: destructiveHint skal være {expected_destructive}"
+        )
+        expected_open_world = tool.name in OPEN_WORLD_TOOLS
+        assert ann.openWorldHint is expected_open_world, (
+            f"{tool.name}: openWorldHint skal være {expected_open_world}"
         )
         assert ann.idempotentHint is True, f"{tool.name} skal være idempotent"
 
