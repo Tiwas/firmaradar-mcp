@@ -416,7 +416,7 @@ def _client_for_token(token: str, base_url: str, timeout_s: float) -> Firmaradar
 def create_app(
     *,
     base_url: str | None = None,
-    timeout_s: float = 30.0,
+    timeout_s: float | None = None,
     stateless: bool = True,
 ):
     """Bygg ASGI-appen som hosters av uvicorn.
@@ -424,7 +424,11 @@ def create_app(
     Args:
       base_url: Firmaradar API-base (default fra ``FIRMARADAR_API_BASE_URL``
         env, fallback ``https://firmaradar.no``).
-      timeout_s: HTTP-timeout for backend-kall.
+      timeout_s: HTTP-timeout for backend-kall. ``None`` → les
+        ``FIRMARADAR_MCP_TIMEOUT_S`` (default 90s). Hevet fra 30s fordi den
+        deterministiske FIV-vurderingen (``/api/v1/fiv/assess``, NUES a-e + full
+        kildeinnsamling) lovlig kan ta 30-50s for enkelte selskap → ga
+        ``httpcore.ReadTimeout`` (HTTP 500 i ChatGPT) på 30s.
       stateless: Hvis True, ingen MCP-session-persistens mellom requests
         (anbefales for Android — mobil-tilkoblinger er ofte korte).
 
@@ -438,6 +442,12 @@ def create_app(
     from starlette.routing import Mount, Route
 
     from mcp.server.streamable_http_manager import StreamableHTTPSessionManager
+
+    if timeout_s is None:
+        try:
+            timeout_s = float(os.environ.get("FIRMARADAR_MCP_TIMEOUT_S", "90"))
+        except (TypeError, ValueError):
+            timeout_s = 90.0
 
     api_base = base_url or os.environ.get(
         "FIRMARADAR_API_BASE_URL", "https://firmaradar.no"
