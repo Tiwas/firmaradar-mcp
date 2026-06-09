@@ -497,6 +497,13 @@ def create_app(
                 timeout_s=timeout_s,
             )
 
+        async def delete(self, path: str, params: dict | None = None) -> Any:
+            # MÅ proxy-es som get/post — ``delete_subscription``-verktøyet kaller
+            # ``client.delete``. Manglet før → «'_DispatchingClient' object has no
+            # attribute 'delete'» i remote-flyten (stdio-klienten hadde den, så bug-en
+            # rammet kun ChatGPT/remote).
+            return await self._resolve().delete(path, params=params)
+
         @property
         def base_url(self) -> str:
             return api_base

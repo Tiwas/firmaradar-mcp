@@ -259,3 +259,39 @@ class TestBearerAuth:
             "/health", headers={"Authorization": "Bearer total-garbage"}
         )
         assert resp.status_code == 200
+
+
+def test_dispatching_client_proxies_every_method_tools_use():
+    """Regresjon: remote-``_DispatchingClient`` MÅ proxy-e HVER HTTP-metode som et
+    verktøy kaller på ``client``.
+
+    ``delete_subscription`` kaller ``client.delete``, men den manglet på
+    ``_DispatchingClient`` → «'_DispatchingClient' object has no attribute 'delete'»
+    i ChatGPT/remote-flyten. stdio-``FirmaradarClient`` hadde den, så bug-en var
+    usynlig lokalt. Denne testen fanger enhver fremtidig metode-mismatch."""
+    import ast
+    import pathlib
+
+    pkg = pathlib.Path(__file__).resolve().parents[1] / "firmaradar_mcp"
+
+    # 1) Metoder verktøyene faktisk kaller på ``client``.
+    used: set[str] = set()
+    for f in (pkg / "tools").glob("*.py"):
+        for node in ast.walk(ast.parse(f.read_text())):
+            if (isinstance(node, ast.Attribute)
+                    and isinstance(node.value, ast.Name)
+                    and node.value.id == "client"):
+                used.add(node.attr)
+    used &= {"get", "post", "delete", "patch", "request"}  # HTTP-verb-metoder
+    assert "delete" in used, "forventet at delete_subscription kaller client.delete"
+
+    # 2) Metoder ``_DispatchingClient`` implementerer.
+    impl: set[str] = set()
+    for node in ast.walk(ast.parse((pkg / "remote_server.py").read_text())):
+        if isinstance(node, ast.ClassDef) and node.name == "_DispatchingClient":
+            impl = {
+                item.name for item in node.body
+                if isinstance(item, (ast.AsyncFunctionDef, ast.FunctionDef))
+            }
+    missing = used - impl
+    assert not missing, f"_DispatchingClient mangler metoder verktøyene kaller: {missing}"
