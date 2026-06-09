@@ -130,7 +130,12 @@ def test_list_tools_advertises_titles_and_annotations() -> None:
     """``server._handler_to_tool`` skal sette ``title`` + ``ToolAnnotations`` på
     hvert verktøy med eksplisitte Apps SDK review-hints."""
     from firmaradar_mcp import server
-    from firmaradar_mcp.tools import DESTRUCTIVE_TOOLS, OPEN_WORLD_TOOLS, WRITE_TOOLS
+    from firmaradar_mcp.tools import (
+        DESTRUCTIVE_TOOLS,
+        NON_IDEMPOTENT_TOOLS,
+        OPEN_WORLD_TOOLS,
+        WRITE_TOOLS,
+    )
 
     for handler in ALL_TOOLS:
         tool = server._handler_to_tool(handler)
@@ -150,7 +155,10 @@ def test_list_tools_advertises_titles_and_annotations() -> None:
         assert ann.openWorldHint is expected_open_world, (
             f"{tool.name}: openWorldHint skal være {expected_open_world}"
         )
-        assert ann.idempotentHint is True, f"{tool.name} skal være idempotent"
+        expected_idempotent = tool.name not in NON_IDEMPOTENT_TOOLS
+        assert ann.idempotentHint is expected_idempotent, (
+            f"{tool.name}: idempotentHint skal være {expected_idempotent}"
+        )
 
 
 def test_every_tool_advertises_output_schema() -> None:

@@ -28,6 +28,7 @@ from .client import FirmaradarClient, FirmaradarClientError
 from .tools import (
     ALL_TOOLS,
     DESTRUCTIVE_TOOLS,
+    NON_IDEMPOTENT_TOOLS,
     OPEN_WORLD_TOOLS,
     TOOL_TITLES,
     WRITE_TOOLS,
@@ -125,7 +126,12 @@ def _handler_to_tool(handler: ToolHandler) -> types.Tool:
     * ``destructiveHint`` — ``True`` for verktøy i
       :data:`~firmaradar_mcp.tools.DESTRUCTIVE_TOOLS` (fjerner en ressurs,
       f.eks. ``delete_subscription``); ``False`` for alle andre.
-    * ``idempotentHint`` — ``True``; gjentatte kall gir samme effekt.
+    * ``idempotentHint`` — ``True`` for de aller fleste verktøy (oppslag har
+      ingen effekt; ``subscribe_nace``/``delete_subscription``/
+      ``confirm_risk_score_disclaimer`` konvergerer til samme state ved gjentak).
+      ``False`` for verktøy i :data:`~firmaradar_mcp.tools.NON_IDEMPOTENT_TOOLS`
+      (``check_aml_pep``/``get_aml_score``/``start_aml_report``) som skriver en NY
+      audit-/report-/job-rad ved HVERT kall.
     * ``openWorldHint`` — ``True`` only for tools that can write to public
       internet state or external third-party systems. Current Firmaradar tools
       do not; they read source-backed data or mutate private Firmaradar account
@@ -151,6 +157,7 @@ def _handler_to_tool(handler: ToolHandler) -> types.Tool:
     read_only = handler.name not in WRITE_TOOLS
     destructive = handler.name in DESTRUCTIVE_TOOLS
     open_world = handler.name in OPEN_WORLD_TOOLS
+    idempotent = handler.name not in NON_IDEMPOTENT_TOOLS
     return types.Tool(
         name=handler.name,
         title=title,
@@ -161,7 +168,7 @@ def _handler_to_tool(handler: ToolHandler) -> types.Tool:
             title=title,
             readOnlyHint=read_only,
             destructiveHint=destructive,
-            idempotentHint=True,
+            idempotentHint=idempotent,
             openWorldHint=open_world,
         ),
         # securitySchemes — OpenAI Apps SDK krever dette + runtime-_meta for

@@ -207,6 +207,23 @@ DESTRUCTIVE_TOOLS: frozenset[str] = frozenset({
     "firmaradar_delete_subscription",
 })
 
+# Tools that are NOT idempotent — calling them again with the same arguments
+# produces an ADDITIONAL effect, so they are advertised with
+# ``idempotentHint=False``. Every other tool is idempotent: pure lookups have no
+# effect, and the remaining write-tools converge to the same state on repeat
+# (``subscribe_nace`` upserts on ``(user, nace_code)``; ``delete_subscription``
+# 404-no-ops once gone; ``confirm_risk_score_disclaimer`` returns the existing
+# confirmation without writing a duplicate row).
+#
+# * ``check_aml_pep`` appends a new per-call AML/PEP audit record every time.
+# * ``get_aml_score`` stores a new auditable AML report record every time.
+# * ``start_aml_report`` creates a new async AML report job every time.
+NON_IDEMPOTENT_TOOLS: frozenset[str] = frozenset({
+    "firmaradar_check_aml_pep",
+    "firmaradar_get_aml_score",
+    "firmaradar_start_aml_report",
+})
+
 
 __all__ = [
     "ALL_TOOLS",
@@ -215,4 +232,5 @@ __all__ = [
     "WRITE_TOOLS",
     "OPEN_WORLD_TOOLS",
     "DESTRUCTIVE_TOOLS",
+    "NON_IDEMPOTENT_TOOLS",
 ]
