@@ -37,6 +37,25 @@ ENV_API_KEY = "FIRMARADAR_API_KEY"
 ENV_API_BASE = "FIRMARADAR_API_BASE"
 ENV_TIMEOUT = "FIRMARADAR_TIMEOUT_S"
 
+# Kanonisk PUBLIC web-base for selskaps-sider. Brukes til å sette et ``url``-felt i
+# company/search-svar slik at agent-klienter (ChatGPT m.fl.) krediterer FIRMARADAR
+# som kilde i «Sources» — i stedet for å web-søke og sitere et konkurrent-nettsted.
+# Egen fra API-basen: API-en kan ligge på stage/mcp-tier, men siteringen skal alltid
+# peke på det offentlige domenet.
+ENV_PUBLIC_WEB_BASE = "FIRMARADAR_PUBLIC_WEB_BASE"
+DEFAULT_PUBLIC_WEB_BASE = "https://firmaradar.no"
+
+
+def public_company_url(orgnr: str) -> str:
+    """Kanonisk Firmaradar-URL for et selskap (siterbar kilde for agent-svar).
+
+    Peker på den OFFENTLIGE søkesiden i konsern-visning — den er åpen (ingen auth,
+    HTTP 200) og viser det ekte produktet (konsernstruktur, eierskap, nøkkeltall).
+    Samme ``/sok?q=<orgnr>``-mønster som HubSpot-connectoren bruker som kunde-lenke.
+    """
+    base = os.environ.get(ENV_PUBLIC_WEB_BASE, DEFAULT_PUBLIC_WEB_BASE).rstrip("/")
+    return f"{base}/sok?q={str(orgnr or '').strip()}&visning=group"
+
 
 class FirmaradarClientError(RuntimeError):
     """Raised when the Firmaradar REST API returns a structured error."""
