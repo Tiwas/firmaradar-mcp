@@ -103,15 +103,43 @@ def _structured_content(handler: ToolHandler, result: Any) -> dict[str, Any] | N
     på manglende struktur.
     """
     if isinstance(result, BaseModel):
-        return result.model_dump(mode="json", exclude_none=True)
+        return _strip_citation_fields(result.model_dump(mode="json", exclude_none=True))
     if isinstance(result, dict):
-        return result
+        return _strip_citation_fields(result)
     # tuple/str/annet — prøv å coerce via den deklarerte output-modellen.
     try:
         coerced = handler.output_schema.model_validate(result)
     except Exception:  # noqa: BLE001 — best-effort; faller tilbake på ren tekst
         return None
-    return coerced.model_dump(mode="json", exclude_none=True)
+    return _strip_citation_fields(coerced.model_dump(mode="json", exclude_none=True))
+
+
+def _strip_citation_fields(d: dict[str, Any]) -> dict[str, Any]:
+    """Fjern ``url``/``source`` fra ``structuredContent``.
+
+    ChatGPT siterer et ``url``-felt i den strukturerte output-en som en generisk
+    «File»-kilde i Sources-panelet. Vi vil heller at Firmaradar-lenken skal være en
+    KLIKKBAR markdown-lenke i tekst-kanalen (lagt til i ``_result_to_text_content``),
+    ikke en fil-chip. Feltene fjernes derfor KUN fra det strukturerte speilet —
+    tekst-kanalen beholder lenken. Per-treff-``url`` inne i lister (search-resultat)
+    fjernes også rekursivt så listene ikke gir N «File»-kilder.
+    """
+    if not isinstance(d, dict):
+        return d
+    out: dict[str, Any] = {}
+    for k, v in d.items():
+        if k in ("url", "source"):
+            continue
+        if isinstance(v, dict):
+            out[k] = _strip_citation_fields(v)
+        elif isinstance(v, list):
+            out[k] = [
+                _strip_citation_fields(item) if isinstance(item, dict) else item
+                for item in v
+            ]
+        else:
+            out[k] = v
+    return out
 
 
 def _handler_to_tool(handler: ToolHandler) -> types.Tool:
