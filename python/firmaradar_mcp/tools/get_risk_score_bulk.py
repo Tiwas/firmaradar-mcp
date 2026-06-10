@@ -62,7 +62,11 @@ class BulkRiskScoreResult(BaseModel):
         ),
     )
     components: list[RiskComponentBrief] = Field(default_factory=list)
-    raw: dict[str, Any] | None = None
+    # Full backend-respons per orgnr — KUN for intern bruk/debug. Ekskludert fra
+    # serialisering (``exclude=True``): den blåste opp bulk-svaret 7× → ChatGPT
+    # trunkerte og falt tilbake til individuelle kall. Strukturerte felt over
+    # (score/risk_level/components) er det agenten trenger.
+    raw: dict[str, Any] | None = Field(default=None, exclude=True)
 
 
 class BulkMeta(BaseModel):
@@ -78,6 +82,25 @@ class GetRiskScoreBulkOutput(BaseModel):
         alias="_meta",
         description="Aggregate count status for the whole bulk call.",
     )
+    summary: str | None = Field(
+        default=None,
+        description="Human-readable markdown table of the per-company scores.",
+    )
+
+
+def _bulk_summary_table(results: list[BulkRiskScoreResult]) -> str:
+    """Bygg en kompakt markdown-tabell over bulk-resultatene.
+
+    Gjør at ChatGPT rendrer en ren score-tabell inline i stedet for å trunkere
+    en stor JSON-blob (og falle tilbake til individuelle kall)."""
+    lines = ["| Orgnr | Score | Nivå |", "|---|---|---|"]
+    for r in results:
+        if r.error:
+            lines.append(f"| {r.orgnr} | — | {r.error} |")
+        else:
+            score = "—" if r.score is None else f"{r.score:g}"
+            lines.append(f"| {r.orgnr} | {score} | {r.risk_level or '—'} |")
+    return "\n".join(lines)
 
 
 def _coerce_result(raw: dict[str, Any], fallback_orgnr: str) -> BulkRiskScoreResult:
@@ -143,7 +166,9 @@ async def handle(
         successful=int(meta_raw.get("successful", 0) or 0),
         failed=int(meta_raw.get("failed", 0) or 0),
     )
-    return GetRiskScoreBulkOutput(results=results, _meta=meta)
+    return GetRiskScoreBulkOutput(
+        results=results, _meta=meta, summary=_bulk_summary_table(results),
+    )
 
 
 HANDLER = ToolHandler(

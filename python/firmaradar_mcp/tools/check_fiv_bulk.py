@@ -63,7 +63,9 @@ class BulkFivResult(BaseModel):
     )
     score: float | None = None
     confidence: float | None = None
-    raw: dict[str, Any] | None = None
+    # Full backend-respons per orgnr — ekskludert fra serialisering (blåste opp
+    # svaret → ChatGPT trunkerte). De strukturerte feltene over er nok for agenten.
+    raw: dict[str, Any] | None = Field(default=None, exclude=True)
 
 
 class BulkMeta(BaseModel):
@@ -72,12 +74,40 @@ class BulkMeta(BaseModel):
     failed: int
 
 
+# 3-stegs-dom (speiler firmaradar.fiv): Ja / Tvil / Nei (*).
+_FIV_VERDICT = {
+    "distressed": "Ja",
+    "not_distressed": "Nei (*)",
+    "exempt_young_company": "Nei (*)",
+    "not_distressed_partial": "Tvil",
+    "insufficient_data": "Tvil",
+    "requires_manual_review": "Tvil",
+}
+
+
+def _fiv_bulk_summary_table(results: list[BulkFivResult]) -> str:
+    """Kompakt markdown-tabell over bulk-FIV-dommene (Ja/Tvil/Nei (*))."""
+    lines = ["| Orgnr | FIV-dom |", "|---|---|"]
+    for r in results:
+        if r.error:
+            lines.append(f"| {r.orgnr} | {r.error} |")
+        else:
+            lines.append(
+                f"| {r.orgnr} | {_FIV_VERDICT.get((r.status or '').strip().lower(), r.status or '—')} |"
+            )
+    return "\n".join(lines)
+
+
 class CheckFivBulkOutput(BaseModel):
     results: list[BulkFivResult] = Field(default_factory=list)
     meta: BulkMeta = Field(
         ...,
         alias="_meta",
         description="Aggregate count status for the whole bulk call.",
+    )
+    summary: str | None = Field(
+        default=None,
+        description="Human-readable markdown table of the per-company FIV verdicts.",
     )
 
 
@@ -128,7 +158,9 @@ async def handle(
         successful=int(meta_raw.get("successful", 0) or 0),
         failed=int(meta_raw.get("failed", 0) or 0),
     )
-    return CheckFivBulkOutput(results=results, _meta=meta)
+    return CheckFivBulkOutput(
+        results=results, _meta=meta, summary=_fiv_bulk_summary_table(results),
+    )
 
 
 HANDLER = ToolHandler(

@@ -180,21 +180,33 @@ def _handler_to_tool(handler: ToolHandler) -> types.Tool:
 def _result_to_text_content(result: Any) -> list[types.TextContent]:
     """Pakke handler-resultatet inn i MCP TextContent.
 
-    Handler kan returnere en pydantic BaseModel, en dict, eller en
-    streng. Vi serialiserer som JSON for konsistent agent-konsum.
+    OpenAI Apps/ChatGPT-mønster: lever LESBAR tekst i ``content``, ikke en rå
+    JSON-blob. ChatGPT rendrer en stor JSON-blob som en «file»-ressurs (og
+    trunkerer den for store svar → agenten faller tilbake). Vi leder derfor med
+    ``summary`` når verktøyet har en (eks. en markdown-tabell for bulk), og legger
+    til en KLIKKBAR Firmaradar-lenke fra ``url`` — så kilden vises som en lenke,
+    ikke en generisk fil-chip. Full struktur ligger uansett i ``structuredContent``
+    (for klienter/widgets). Verktøy uten ``summary`` faller tilbake på JSON.
     """
+    if isinstance(result, str):
+        return [types.TextContent(type="text", text=result)]
     if hasattr(result, "model_dump"):
         payload = result.model_dump(mode="json", exclude_none=True)
     elif isinstance(result, dict):
         payload = result
-    elif isinstance(result, str):
-        return [types.TextContent(type="text", text=result)]
     else:
         payload = {"result": result}
-    return [types.TextContent(
-        type="text",
-        text=json.dumps(payload, ensure_ascii=False, indent=2),
-    )]
+
+    summary = payload.get("summary") if isinstance(payload, dict) else None
+    url = payload.get("url") if isinstance(payload, dict) else None
+
+    if summary and str(summary).strip():
+        text = str(summary).strip()
+    else:
+        text = json.dumps(payload, ensure_ascii=False, indent=2)
+    if url:
+        text = f"{text}\n\n[Åpne i Firmaradar →]({url})"
+    return [types.TextContent(type="text", text=text)]
 
 
 # ── Re-auth-signal for ChatGPT (OpenAI MCP-connector) ──────────────────
