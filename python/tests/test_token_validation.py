@@ -16,7 +16,6 @@ Bruker respx for å mocke httpx uten ekte HTTP-server.
 from __future__ import annotations
 
 import httpx
-import pytest
 import respx
 
 from firmaradar_mcp._token_validation import TokenStatus, TokenValidator

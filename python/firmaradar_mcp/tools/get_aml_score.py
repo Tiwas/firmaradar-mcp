@@ -26,7 +26,7 @@ from . import ToolHandler
 # AML-kall og overstige 30 s-defaulten i vegg-klokke (kø + prosessering) — selv
 # om backend-prosesseringen er under 30 s. Hever timeouten KUN for dette
 # verktøyet til 60 s; alle andre verktøy beholder 30 s. Se
-# plans/arkitektur/AML_SCORE_PERF_PLAN.md §7 (async-sti = varig fiks).
+# backups/deleted/2026-06-18-plans-todo-opprydding/plans/arkitektur/AML_SCORE_PERF_PLAN.md §7 (async-sti = varig fiks).
 AML_SCORE_TIMEOUT_S: float = 60.0
 
 

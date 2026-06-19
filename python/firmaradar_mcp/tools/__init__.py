@@ -108,7 +108,7 @@ ALL_TOOLS: list[ToolHandler] = [
     check_foretak_i_vanskeligheter.HANDLER,
     get_aml_score.HANDLER,
     get_konsernstotte.HANDLER,
-    # ── AML-rapport async-sti (AML_SCORE_PERF_PLAN.md §8, 2026-05-31) (2) ──
+    # ── AML-rapport async-sti (backups/deleted/2026-06-18-plans-todo-opprydding/plans/arkitektur/AML_SCORE_PERF_PLAN.md §8, 2026-05-31) (2) ──
     start_aml_report.HANDLER,
     get_aml_report.HANDLER,
     # ── v0.3 compliance-helpers (#134, 2026-05-27) (1) ──

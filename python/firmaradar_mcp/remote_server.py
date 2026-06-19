@@ -63,6 +63,24 @@ _WWW_AUTH_INVALID = (
     'Bearer realm="firmaradar-mcp", error="invalid_token", '
     f'resource_metadata="{_RESOURCE_METADATA_URL}"'
 )
+_SECURITY_HEADERS = (
+    ("strict-transport-security", "max-age=31536000; includeSubDomains"),
+    ("x-content-type-options", "nosniff"),
+    ("x-frame-options", "DENY"),
+    (
+        "content-security-policy",
+        "default-src 'none'; base-uri 'none'; form-action 'none'; "
+        "frame-ancestors 'none'",
+    ),
+    ("referrer-policy", "no-referrer"),
+    (
+        "permissions-policy",
+        "camera=(), microphone=(), geolocation=(), payment=(), "
+        "fullscreen=(), interest-cohort=()",
+    ),
+    ("cross-origin-opener-policy", "same-origin"),
+    ("cross-origin-resource-policy", "same-origin"),
+)
 
 # ChatGPT-spesifikk re-auth-trigger.
 #
@@ -98,6 +116,41 @@ def _configure_logging() -> None:
 
 
 # ── Auth-middleware (placeholder for OAuth, #117) ──────────────────────
+
+def _build_security_headers_middleware():
+    """Return ASGI middleware that hardens every HTTP response."""
+    from starlette.types import ASGIApp, Receive, Scope, Send
+
+    class SecurityHeadersMiddleware:
+        def __init__(self, app: ASGIApp) -> None:
+            self.app = app
+
+        async def __call__(
+            self,
+            scope: Scope,
+            receive: Receive,
+            send: Send,
+        ) -> None:
+            if scope["type"] != "http":
+                await self.app(scope, receive, send)
+                return
+
+            async def send_with_security_headers(message) -> None:
+                if message["type"] == "http.response.start":
+                    headers = list(message.get("headers", []))
+                    existing = {name.lower() for name, _value in headers}
+                    headers.extend(
+                        (name.encode("latin-1"), value.encode("latin-1"))
+                        for name, value in _SECURITY_HEADERS
+                        if name.encode("latin-1") not in existing
+                    )
+                    message = {**message, "headers": headers}
+                await send(message)
+
+            await self.app(scope, receive, send_with_security_headers)
+
+    return SecurityHeadersMiddleware
+
 
 def _extract_bearer_token(headers) -> str | None:
     """Parse ``Authorization: Bearer <token>``-header (case-insensitive)."""
@@ -575,7 +628,10 @@ def create_app(
             # MCP streamable-HTTP-transport
             Mount("/mcp", app=handle_mcp),
         ],
-        middleware=[Middleware(_build_auth_middleware(validator))],
+        middleware=[
+            Middleware(_build_security_headers_middleware()),
+            Middleware(_build_auth_middleware(validator)),
+        ],
         lifespan=_lifespan,
     )
 

@@ -21,9 +21,14 @@ export const schema = z.object({
         "full_owners",
         "grants",
         "brreg_grants",
+        "ip",
         "changes",
         "financial_metrics",
       ]),
+    )
+    .describe(
+      "Opt-in sections. Notably `ip` — intellectual-property portfolio (patents, " +
+        "trademarks and designs from Patentstyret).",
     )
     .optional(),
   owners: z.enum(["business", "full"]).optional(),

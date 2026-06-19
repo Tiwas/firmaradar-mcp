@@ -19,6 +19,29 @@ import pytest
 from firmaradar_mcp._token_validation import TokenStatus
 
 
+_EXPECTED_SECURITY_HEADERS = {
+    "strict-transport-security": "max-age=31536000; includeSubDomains",
+    "x-content-type-options": "nosniff",
+    "x-frame-options": "DENY",
+    "content-security-policy": (
+        "default-src 'none'; base-uri 'none'; form-action 'none'; "
+        "frame-ancestors 'none'"
+    ),
+    "referrer-policy": "no-referrer",
+    "permissions-policy": (
+        "camera=(), microphone=(), geolocation=(), payment=(), "
+        "fullscreen=(), interest-cohort=()"
+    ),
+    "cross-origin-opener-policy": "same-origin",
+    "cross-origin-resource-policy": "same-origin",
+}
+
+
+def _assert_security_headers(response) -> None:
+    for header, expected in _EXPECTED_SECURITY_HEADERS.items():
+        assert response.headers.get(header) == expected
+
+
 class _StubValidator:
     """Test-validator som returnerer en fast :class:`TokenStatus`.
 
@@ -101,6 +124,30 @@ class TestHealth:
         resp = await client.get("/health")
         from firmaradar_mcp import __version__
         assert resp.json()["version"] == __version__
+
+    async def test_health_has_global_security_headers(self, client):
+        resp = await client.get("/health")
+
+        assert resp.status_code == 200
+        _assert_security_headers(resp)
+
+
+class TestSecurityHeaders:
+
+    async def test_auth_gated_non_route_has_global_security_headers(self, client):
+        resp = await client.get("/")
+
+        assert resp.status_code == 401
+        _assert_security_headers(resp)
+
+    async def test_auth_middleware_401_has_global_security_headers(
+        self,
+        client,
+    ):
+        resp = await client.post("/mcp/")
+
+        assert resp.status_code == 401
+        _assert_security_headers(resp)
 
 
 class TestBearerAuth:

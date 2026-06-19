@@ -40,6 +40,21 @@ class GetCompanySignalsOutput(BaseModel):
     distress_reasons: list[str] = Field(default_factory=list)
     kyc_signals: list[KycSignal] = Field(default_factory=list)
     interim_balance_signal: dict[str, Any] | None = None
+    hiring: dict[str, Any] | None = Field(
+        default=None,
+        description="NAV Arbeidsplassen hiring/growth signal: active_postings, "
+        "positions_active, postings_30d/90d, burst_score, is_hiring_burst.",
+    )
+    fusjon: dict[str, Any] | None = Field(
+        default=None,
+        description="Merger/demerger relations: inbound (companies merged into "
+        "this orgnr) + outbound (companies this orgnr was merged into), with dates.",
+    )
+    frivillighet: dict[str, Any] | None = Field(
+        default=None,
+        description="Authoritative Frivillighetsregister (voluntary-org) membership: "
+        "registered, registreringsdato, kategorier. Omitted when the source is off.",
+    )
     recent_role_changes_count: int = 0
     generated_at: str | None = None
     summary: str | None = None
@@ -104,6 +119,13 @@ async def handle(
     if interim and interim.get("error"):
         interim = None
 
+    def _clean(key: str) -> dict[str, Any] | None:
+        """Pass-through av en kilde-blokk; dropp {"error": ...}-konvolutter."""
+        blk = payload.get(key)
+        if not isinstance(blk, dict) or blk.get("error"):
+            return None
+        return blk
+
     return GetCompanySignalsOutput(
         orgnr=str(payload.get("orgnr", params.orgnr)),
         distress_category=distress_category,
@@ -111,6 +133,9 @@ async def handle(
         distress_reasons=distress_reasons,
         kyc_signals=kyc_signals,
         interim_balance_signal=interim,
+        hiring=_clean("hiring"),
+        fusjon=_clean("fusjon"),
+        frivillighet=_clean("frivillighet"),
         recent_role_changes_count=0,  # ikke en del av v0.2-payload; v0.3
         generated_at=None,
         summary=None,
@@ -120,10 +145,12 @@ async def handle(
 HANDLER = ToolHandler(
     name="firmaradar_get_company_signals",
     description=(
-        "Aggregated risk signals for one company: bankruptcy/distress score, "
-        "capital-loss flags, recent role/signature changes, M&A interim-balance "
-        "signals and KYC announcement anomalies. Use as the second step after "
-        "`get_company` to evaluate whether a company needs deeper due diligence."
+        "Aggregated risk and growth signals for one company: bankruptcy/distress "
+        "score, capital-loss flags, M&A interim-balance signals, KYC announcement "
+        "anomalies, NAV hiring/growth signal, and merger/demerger (fusjon/fisjon) "
+        "relations plus authoritative voluntary-org (Frivillighetsregister) status. "
+        "Use as the second step after `get_company` to evaluate whether a company "
+        "needs deeper due diligence."
     ),
     input_schema=GetCompanySignalsInput,
     output_schema=GetCompanySignalsOutput,
