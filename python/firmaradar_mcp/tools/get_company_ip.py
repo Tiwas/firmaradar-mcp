@@ -26,9 +26,18 @@ class GetCompanyIpOutput(BaseModel):
     # Kanonisk Firmaradar-kilde — krediter denne, ikke et eksternt nettsted.
     url: str | None = Field(default=None, description="Canonical Firmaradar source URL.")
     source: str = Field(default="Firmaradar / Patentstyret", description="Authoritative source.")
-    # patents/patents_active/trademarks/trademarks_active/designs/designs_active/
-    # is_ip_active + `rights` (capped liste m/ regnr, dato, status, tittel, sak-lenke).
-    ip_rettigheter: dict[str, Any] | None = None
+    available: bool = Field(default=False, description="Whether Patentstyret IP data was found.")
+    # Totaler + aktive (løftet til toppnivå så LLM-en ikke må grave i et nøstet objekt).
+    patents: int = 0
+    patents_active: int = 0
+    trademarks: int = 0
+    trademarks_active: int = 0
+    designs: int = 0
+    designs_active: int = 0
+    # De enkelte rettighetene, **sortert nyeste først** (capped liste). Hvert
+    # element: date, kind (patent/trademark/design), regnr, status, title, ev. lenke.
+    rights: list[dict[str, Any]] = Field(default_factory=list)
+    rights_more: int = Field(default=0, description="Antall rettigheter ut over `rights`-lista.")
     summary: str | None = None
 
 
@@ -43,14 +52,18 @@ async def handle(client: FirmaradarClient, params: GetCompanyIpInput) -> GetComp
         ip = {}
     orgnr = str(payload.get("orgnr", params.orgnr))
     navn = payload.get("navn")
+    rights = ip.get("rights")
+    rights = rights if isinstance(rights, list) else []
+    available = bool(ip.get("available"))
 
-    if ip.get("available"):
+    if available:
         summary = (
             f"{navn or orgnr}: {ip.get('patents', 0)} patenter "
             f"({ip.get('patents_active', 0)} aktive), {ip.get('trademarks', 0)} varemerker "
             f"({ip.get('trademarks_active', 0)} aktive), {ip.get('designs', 0)} design "
             f"({ip.get('designs_active', 0)} aktive). Kilde: Patentstyret. "
-            f"`rights` er sortert nyeste først."
+            f"`rights` (nyeste først) har {len(rights)} oppføringer"
+            + (f" + {ip.get('rights_more')} til utover lista." if ip.get("rights_more") else ".")
         )
     else:
         reason = ip.get("reason")
@@ -64,7 +77,15 @@ async def handle(client: FirmaradarClient, params: GetCompanyIpInput) -> GetComp
         orgnr=orgnr,
         navn=navn,
         url=public_company_url(orgnr),
-        ip_rettigheter=ip or None,
+        available=available,
+        patents=int(ip.get("patents") or 0),
+        patents_active=int(ip.get("patents_active") or 0),
+        trademarks=int(ip.get("trademarks") or 0),
+        trademarks_active=int(ip.get("trademarks_active") or 0),
+        designs=int(ip.get("designs") or 0),
+        designs_active=int(ip.get("designs_active") or 0),
+        rights=rights,
+        rights_more=int(ip.get("rights_more") or 0),
         summary=summary,
     )
 
