@@ -57,6 +57,7 @@ from . import (  # noqa: E402
     get_aml_report,
     get_aml_score,
     get_company,
+    get_company_ip,
     start_aml_report,
     get_company_announcements,
     get_company_financials,
@@ -84,6 +85,7 @@ ALL_TOOLS: list[ToolHandler] = [
     # Selskap (6)
     search_companies.HANDLER,
     get_company.HANDLER,
+    get_company_ip.HANDLER,
     get_company_ownership.HANDLER,
     get_company_roles.HANDLER,
     get_company_financials.HANDLER,
