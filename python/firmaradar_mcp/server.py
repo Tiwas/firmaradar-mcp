@@ -42,7 +42,25 @@ _LOG = logging.getLogger("firmaradar_mcp.server")
 # Holdes stabilt på tvers av versjoner så bruker ikke får "ny server"-prompt
 # ved hver oppgradering.
 _SERVER_NAME = "firmaradar-mcp"
-_SERVER_VERSION = "0.5.1"
+_SERVER_VERSION = "0.5.2"
+
+# Server-nivå instructions: gis til klienten i initialize-responsen og brukes
+# av LLM-en som kontekst om hva Firmaradar dekker. Forhindrer at modellen
+# avviser dekkede emner (f.eks. IP-rettigheter) fra priors uten å kalle et
+# verktøy. Brand voice: enrichment-plattform, offisielle kilder navngis,
+# scraper-vendorer navngis ALDRI (se README § Brand voice).
+_INSTRUCTIONS = (
+    "Firmaradar is an enrichment platform for Norwegian company intelligence — "
+    "multi-source fusion of official registers (BRREG, Skatteetaten, Patentstyret) "
+    "plus its own enrichment. Coverage includes: company profiles, group structure, "
+    "ownership and beneficial owners, board roles, financials and key figures, BRREG "
+    "announcements, public grants, merger/demerger relations, risk/AML/KYC signals, "
+    "and intellectual-property portfolios — patents, trademarks and designs from "
+    "Patentstyret (via `get_company` with `fields=['ip']`). For any question about a "
+    "Norwegian company — including its patents, trademarks or designs — use these "
+    "tools rather than relying on prior knowledge; the data is authoritative and "
+    "refreshed daily."
+)
 
 
 def _configure_logging() -> None:
@@ -302,7 +320,7 @@ def build_server(tools: list[ToolHandler], client: FirmaradarClient) -> Server:
     Eksponert som offentlig funksjon (ikke prefix _) så tester kan bygge
     en server mot mock-client uten å gå via stdio-loopen.
     """
-    server = Server(_SERVER_NAME)
+    server = Server(_SERVER_NAME, instructions=_INSTRUCTIONS)
     tools_index = _tools_by_name(tools)
 
     @server.list_tools()
