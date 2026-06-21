@@ -30,7 +30,15 @@ from . import ToolHandler
 
 
 class CheckAmlPepInput(BaseModel):
-    name: str = Field(min_length=2, max_length=200, description="Full name to screen.")
+    name: str = Field(
+        min_length=2,
+        max_length=200,
+        description=(
+            "Full name of ONE natural PERSON to screen (e.g. 'Ola Nordmann'). "
+            "NOT a company name or orgnr — for company AML use "
+            "firmaradar_get_aml_score instead."
+        ),
+    )
     birth_year: int | None = Field(default=None, ge=1900, le=2100)
     kategori: Literal["sanksjon", "pep", "both"] = Field(default="both")
     min_match_ratio: float = Field(default=0.85, ge=0.0, le=1.0)
@@ -112,7 +120,14 @@ async def handle(
 HANDLER = ToolHandler(
     name="firmaradar_check_aml_pep",
     description=(
-        "Screen a person's name against sanctions (OFAC, EU, UN) and PEP lists. "
+        "Screen ONE natural PERSON's full name against sanctions (OFAC, EU, UN) "
+        "and PEP lists. "
+        "IMPORTANT — this is a PERSON tool only. Do NOT pass a company name, an "
+        "organisation number (orgnr), or any non-person string here. For "
+        "company-level AML risk use `firmaradar_get_aml_score` (by orgnr); to "
+        "screen a company's owners/officers, first resolve the people via "
+        "`firmaradar_get_company_roles` / `firmaradar_get_company_ownership`, "
+        "then screen each PERSON name with this tool. "
         "Compliance-critical: PII-sensitive, requires a signed DPA and a "
         "legitimate purpose per call (free-text `purpose` parameter). "
         "Audit-logged for 60 months. Rate-limited to 50 calls / 30 min per "

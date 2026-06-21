@@ -67,7 +67,9 @@ async def handle(
     return GetRiskScoreOutput(
         orgnr=str(payload.get("orgnr", params.orgnr)),
         score=float(payload.get("score", 0) or 0),
-        level=str(payload.get("level", "unknown")),
+        # Backend sender det norske feltet ``risk_level`` (ikke ``level``) →
+        # tidligere falt vi alltid til "unknown". Les begge med fallback.
+        level=str(payload.get("level") or payload.get("risk_level") or "unknown"),
         components=components,
         sources=list(payload.get("sources") or []),
         data_gaps=list(payload.get("data_gaps") or []),

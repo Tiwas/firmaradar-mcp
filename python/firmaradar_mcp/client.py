@@ -147,7 +147,10 @@ class FirmaradarClient:
 
     async def get(self, path: str, params: dict[str, Any] | None = None) -> Any:
         """Issue a GET against the REST API and return decoded JSON."""
-        response = await self._client.get(path, params=params)
+        try:
+            response = await self._client.get(path, params=params)
+        except httpx.TimeoutException as exc:
+            raise self._timeout_error(path, self._config.timeout_s) from exc
         return self._handle_response(response)
 
     async def post(
@@ -174,7 +177,12 @@ class FirmaradarClient:
         kwargs: dict[str, Any] = {"json": json_body, "headers": extra_headers}
         if timeout_s is not None:
             kwargs["timeout"] = timeout_s
-        response = await self._client.post(path, **kwargs)
+        try:
+            response = await self._client.post(path, **kwargs)
+        except httpx.TimeoutException as exc:
+            raise self._timeout_error(
+                path, timeout_s if timeout_s is not None else self._config.timeout_s
+            ) from exc
         return self._handle_response(response)
 
     async def delete(
@@ -189,7 +197,10 @@ class FirmaradarClient:
         the Bearer-user created). Auth + error-handling are identical to
         ``get`` / ``post``.
         """
-        response = await self._client.request("DELETE", path, params=params)
+        try:
+            response = await self._client.request("DELETE", path, params=params)
+        except httpx.TimeoutException as exc:
+            raise self._timeout_error(path, self._config.timeout_s) from exc
         return self._handle_response(response)
 
     async def aclose(self) -> None:
@@ -198,6 +209,22 @@ class FirmaradarClient:
     # ------------------------------------------------------------------
     # Internals
     # ------------------------------------------------------------------
+
+    @staticmethod
+    def _timeout_error(path: str, timeout_s: float) -> "FirmaradarClientError":
+        """Wrap an ``httpx`` timeout in a self-explanatory client error.
+
+        ``str(httpx.ReadTimeout())`` is the empty string, so an un-wrapped
+        timeout surfaced to the MCP server as ``"Internal error"`` with an
+        empty ``details`` field — opaque and undiagnosable. We give it an
+        explicit message + a synthetic 504 so the server's existing
+        ``FirmaradarClientError`` branch renders a clear upstream-timeout.
+        """
+        return FirmaradarClientError(
+            f"Upstream timed out after {timeout_s:.0f}s for {path}. The endpoint "
+            "is slow, not down — retry, or use an async/bulk variant if available.",
+            status_code=504,
+        )
 
     @staticmethod
     def _handle_response(response: httpx.Response) -> Any:
