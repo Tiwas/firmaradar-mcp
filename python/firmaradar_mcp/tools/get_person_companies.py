@@ -51,18 +51,26 @@ async def handle(
     if not isinstance(payload, dict):
         payload = {}
     shareholdings_raw = payload.get("shareholdings") or []
+    # Backend (`ownership_pg.person_profile`) bruker nøklene `child_orgnr`,
+    # `company_name`, `share_count`, `ownership_pct` — IKKE `orgnr`/`navn`/
+    # `antall_aksjer`/`eierandel_prosent`. Tidligere leste vi sistnevnte → alle
+    # rader kom ut tomme (men `total_companies` stemte via len-fallback). Les
+    # de faktiske backend-nøklene, med fallback for bakoverkompatibilitet.
     shareholdings = [
         Shareholding(
-            orgnr=str(s.get("orgnr", "")),
-            navn=str(s.get("navn", "")),
-            antall_aksjer=s.get("antall_aksjer"),
-            eierandel_prosent=s.get("eierandel_prosent"),
+            orgnr=str(s.get("child_orgnr") or s.get("orgnr") or ""),
+            navn=str(s.get("company_name") or s.get("navn") or ""),
+            antall_aksjer=s.get("share_count", s.get("antall_aksjer")),
+            eierandel_prosent=s.get("ownership_pct", s.get("eierandel_prosent")),
         )
         for s in shareholdings_raw
     ]
     return GetPersonCompaniesOutput(
-        person_key=str(payload.get("person_key", params.person_key)),
-        navn=str(payload.get("navn", "")),
+        person_key=str(
+            payload.get("owner_person_key") or payload.get("person_key")
+            or params.person_key
+        ),
+        navn=str(payload.get("owner_name") or payload.get("navn") or ""),
         shareholdings=shareholdings,
         total_companies=int(payload.get("total_companies", len(shareholdings))),
     )
