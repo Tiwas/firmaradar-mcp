@@ -115,18 +115,35 @@ def _coerce_result(raw: dict[str, Any], fallback_orgnr: str) -> BulkFivResult:
     """Map et per-orgnr-respons-objekt til BulkFivResult."""
     if not isinstance(raw, dict):
         return BulkFivResult(orgnr=fallback_orgnr, error="invalid_response", raw=None)
+    status = raw.get("status") if isinstance(raw.get("status"), str) else None
+    coverage = str(raw.get("coverage") or "").lower()
+    # Backend emitter ikke numerisk score/confidence — avled fra coverage + status
+    # (samme som single-verktøyet check_foretak_i_vanskeligheter). Behold ev.
+    # eksplisitt backend-verdi hvis den noen gang dukker opp.
+    if isinstance(raw.get("confidence"), (int, float)):
+        confidence: float | None = float(raw["confidence"])
+    elif coverage == "complete":
+        confidence = 1.0
+    elif coverage == "incomplete":
+        confidence = 0.5
+    else:
+        confidence = None
+    if isinstance(raw.get("score"), (int, float)):
+        score: float | None = float(raw["score"])
+    else:
+        score = {
+            "distressed": 1.0,
+            "not_distressed_partial": 0.5,
+            "insufficient_data": 0.5,
+            "not_distressed": 0.0,
+            "exempt_young_company": 0.0,
+        }.get(status or "")
     return BulkFivResult(
         orgnr=str(raw.get("orgnr") or fallback_orgnr),
-        status=raw.get("status") if isinstance(raw.get("status"), str) else None,
+        status=status,
         error=raw.get("error") if isinstance(raw.get("error"), str) else None,
-        score=(
-            float(raw["score"]) if isinstance(raw.get("score"), (int, float)) else None
-        ),
-        confidence=(
-            float(raw["confidence"])
-            if isinstance(raw.get("confidence"), (int, float))
-            else None
-        ),
+        score=score,
+        confidence=confidence,
         raw=raw,
     )
 

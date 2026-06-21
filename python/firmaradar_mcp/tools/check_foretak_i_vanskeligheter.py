@@ -47,25 +47,55 @@ async def handle(
     payload = await client.get(f"/api/v1/fiv/assess/{params.orgnr}")
     if not isinstance(payload, dict):
         payload = {}
-    rules_raw = payload.get("rules_fired") or []
+    status = str(payload.get("status", "unknown"))
+    coverage = str(payload.get("coverage", "")).lower()
+
+    # Backend (DistressAssessment) emitter IKKE numerisk `score`/`confidence` eller
+    # en `rules_fired`-liste — de feltene var fantom (alltid 0/tomt). De ekte
+    # signalene er `status`, `coverage`, `triggers` (liste rule-IDer som traff) og
+    # `rule_results` (per-regel-detalj). Vi avleder de strukturerte feltene herfra.
+
+    # confidence = data-dekning: complete → 1.0, incomplete → 0.5.
+    if coverage == "complete":
+        confidence = 1.0
+    elif coverage == "incomplete":
+        confidence = 0.5
+    else:
+        confidence = float(payload.get("confidence") or 0.0)
+
+    # score = enkel distress-indikator i [0,1] avledet av status.
+    _score_by_status = {
+        "distressed": 1.0,
+        "not_distressed_partial": 0.5,
+        "insufficient_data": 0.5,
+        "not_distressed": 0.0,
+        "exempt_young_company": 0.0,
+    }
+    score = _score_by_status.get(status, float(payload.get("score") or 0.0))
+
+    # rules_fired = reglene som traff, fra `triggers` (+ detalj fra rule_results).
+    rule_results = payload.get("rule_results")
+    rule_results = rule_results if isinstance(rule_results, dict) else {}
     rules: list[FivRule] = []
-    for r in rules_raw:
-        if not isinstance(r, dict):
-            continue
+    for trig in payload.get("triggers") or []:
+        rid = str(trig)
+        detail = rule_results.get(rid)
+        detail = detail if isinstance(detail, dict) else {}
         rules.append(
             FivRule(
-                rule_id=str(r.get("rule_id", "")),
-                severity=str(r.get("severity", "")),
-                description=r.get("description"),
+                rule_id=rid,
+                severity=str(detail.get("status") or "triggered"),
+                description=detail.get("reason"),
             )
         )
+
     return CheckFivOutput(
         orgnr=str(payload.get("orgnr", params.orgnr)),
-        status=str(payload.get("status", "unknown")),
-        score=float(payload.get("score", 0) or 0),
-        confidence=float(payload.get("confidence", 0) or 0),
+        status=status,
+        score=score,
+        confidence=confidence,
         rules_fired=rules,
-        as_of=payload.get("as_of"),
+        as_of=payload.get("as_of") or payload.get("assessed_at"),
         raw=payload,
     )
 
