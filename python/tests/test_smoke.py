@@ -29,13 +29,14 @@ from firmaradar_mcp.tools import ALL_TOOLS
 
 
 EXPECTED_TOOL_NAMES = {
-    # Selskap (6)
+    # Selskap (7)
     "firmaradar_search_companies",
     "firmaradar_get_company",
     "firmaradar_get_company_ownership",
     "firmaradar_get_company_roles",
     "firmaradar_get_company_financials",
     "firmaradar_get_company_announcements",
+    "firmaradar_get_company_ip",
     # Person (4)
     "firmaradar_search_persons",
     "firmaradar_get_person",
@@ -77,7 +78,7 @@ EXPECTED_TOOL_NAMES = {
 def test_registry_lists_all_tools() -> None:
     names = {tool.name for tool in ALL_TOOLS}
     assert names == EXPECTED_TOOL_NAMES, names.symmetric_difference(EXPECTED_TOOL_NAMES)
-    assert len(ALL_TOOLS) == 31
+    assert len(ALL_TOOLS) == 32
 
 
 def test_every_tool_has_description_and_schemas() -> None:

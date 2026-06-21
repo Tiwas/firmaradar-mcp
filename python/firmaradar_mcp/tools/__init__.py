@@ -149,6 +149,7 @@ TOOL_TITLES: dict[str, str] = {
     "firmaradar_get_company_roles": "Get Company Roles",
     "firmaradar_get_company_financials": "Get Company Financials",
     "firmaradar_get_company_announcements": "Get Company Announcements",
+    "firmaradar_get_company_ip": "Get Company IP Rights",
     "firmaradar_search_persons": "Search Persons",
     "firmaradar_get_person": "Get Person Profile",
     "firmaradar_get_person_roles": "Get Person Roles",
