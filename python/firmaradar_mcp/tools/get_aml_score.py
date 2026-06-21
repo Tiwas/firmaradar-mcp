@@ -103,12 +103,20 @@ async def handle(
 HANDLER = ToolHandler(
     name="firmaradar_get_aml_score",
     description=(
-        "Structured AML risk score (0-100) with named level (low/medium/high) "
-        "and factor breakdown. Use this when you need the calculated risk "
-        "score with reasoning, not just PEP/sanctions match flags. "
-        "Complements `check_aml_pep` which returns binary match data. "
-        "Generates an auditable AML report on the backend (rapport_id stored "
-        "for 60 months per Hvitvaskingsloven §35)."
+        "Structured COMPANY AML risk score (0-100) with named level "
+        "(low/medium/high) and factor breakdown, by orgnr. This is the primary "
+        "tool for 'what is the AML risk / AML score of company X'. "
+        "Call it ONCE per company — it ALREADY screens the company's key "
+        "persons and beneficial owners against PEP and sanctions lists "
+        "internally and folds that into the score and factors. You normally do "
+        "NOT need to call `check_aml_pep` per owner/officer afterwards; do that "
+        "only for ad-hoc screening of one specific named individual you need "
+        "extra detail on. "
+        "Complements `check_aml_pep` (binary match data for a single PERSON "
+        "name). Generates an auditable AML report on the backend (rapport_id "
+        "stored for 60 months per Hvitvaskingsloven §35). For very large/complex "
+        "ownership structures this can be slow; if it times out, use "
+        "`start_aml_report` + `get_aml_report` (async) instead."
     ),
     input_schema=GetAmlScoreInput,
     output_schema=GetAmlScoreOutput,
