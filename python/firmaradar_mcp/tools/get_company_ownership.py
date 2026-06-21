@@ -56,6 +56,41 @@ class GetCompanyOwnershipOutput(BaseModel):
     summary: str | None = None
 
 
+# Hardt tak per gren (owners/holdings) for å unngå multi-MB-svar på svært
+# bredt eide/forgrente konsern (f.eks. Equinor `both` ga ~987k tegn og sprengte
+# ett MCP-svar). Når en gren overstiger taket beholder vi de N største etter
+# eierandel + setter en `truncated`-markør i summary.
+_MAX_ENTRIES_PER_BRANCH = 200
+
+
+def _ownership_pct(node: Any) -> float:
+    """Hent eierandel-prosent robust (backend bruker `ownership_pct`; eldre
+    klienter/data kan ha `eierandel_prosent`)."""
+    if not isinstance(node, dict):
+        return 0.0
+    value = node.get("ownership_pct")
+    if value is None:
+        value = node.get("eierandel_prosent")
+    try:
+        return float(value) if value is not None else 0.0
+    except (TypeError, ValueError):
+        return 0.0
+
+
+def _bound_branch(
+    entries: list, min_pct: float | None
+) -> tuple[list, bool]:
+    """Filtrer på min_pct (hvis satt) og kapp til de største N. Returnerer
+    ``(liste, truncated)``."""
+    out = [o for o in entries if isinstance(o, dict)]
+    if min_pct is not None:
+        out = [o for o in out if _ownership_pct(o) >= min_pct]
+    truncated = len(out) > _MAX_ENTRIES_PER_BRANCH
+    if truncated:
+        out = sorted(out, key=_ownership_pct, reverse=True)[:_MAX_ENTRIES_PER_BRANCH]
+    return out, truncated
+
+
 async def handle(
     client: FirmaradarClient, params: GetCompanyOwnershipInput
 ) -> GetCompanyOwnershipOutput:
@@ -80,17 +115,29 @@ async def handle(
     if "holdings" in payload:
         tree["holdings"] = payload["holdings"]
 
-    # Filtrer på min_share_pct hvis bedt om (klient-side for v0.1)
-    if params.min_share_pct is not None and tree.get("owners"):
-        tree["owners"] = [
-            o for o in tree["owners"]
-            if (o.get("eierandel_prosent") or 0) >= params.min_share_pct
-        ]
+    # Filtrer på min_share_pct (hvis bedt om) + kapp store grener. owners er en
+    # flat liste; holdings kan være en flat liste ELLER en dict med nestet
+    # `holdings`-liste — håndter begge.
+    notes: list[str] = []
+    if isinstance(tree.get("owners"), list):
+        tree["owners"], trunc = _bound_branch(tree["owners"], params.min_share_pct)
+        if trunc:
+            notes.append(f"owners avkortet til de {_MAX_ENTRIES_PER_BRANCH} største (etter eierandel)")
+    holdings = tree.get("holdings")
+    if isinstance(holdings, list):
+        tree["holdings"], trunc = _bound_branch(holdings, params.min_share_pct)
+        if trunc:
+            notes.append(f"holdings avkortet til de {_MAX_ENTRIES_PER_BRANCH} største")
+    elif isinstance(holdings, dict) and isinstance(holdings.get("holdings"), list):
+        holdings["holdings"], trunc = _bound_branch(holdings["holdings"], params.min_share_pct)
+        if trunc:
+            notes.append(f"holdings avkortet til de {_MAX_ENTRIES_PER_BRANCH} største")
 
     summary = None
-    if tree.get("owners"):
-        n = len(tree["owners"])
-        summary = f"{n} eiere (direction={params.direction})"
+    if isinstance(tree.get("owners"), list) and tree["owners"]:
+        summary = f"{len(tree['owners'])} eiere (direction={params.direction})"
+    if notes:
+        summary = ((summary + ". ") if summary else "") + "; ".join(notes)
 
     return GetCompanyOwnershipOutput(
         orgnr=str(payload.get("orgnr", params.orgnr)),
