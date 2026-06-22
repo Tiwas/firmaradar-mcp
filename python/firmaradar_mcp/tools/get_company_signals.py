@@ -89,18 +89,33 @@ async def handle(
         # Den gamle mappingen sjekket 'no_distress' (feil literal) → traff aldri →
         # alltid 'unknown' (motsa get_risk_score sin not_distressed). Legacy-literals
         # beholdt som fallback.
+        #
+        # «not_distressed_partial» = verdikt «ikke i vanskeligheter», men basert på
+        # DELVISE regnskapsdata. Verdiktet er grønt — det matcher get_risk_score som
+        # gir 0 distress-poeng for samme selskap (QA-funn 2026-06-22: gul her motsa
+        # grønn der). «partial» er et data-forbehold (surfaces i distress_reasons),
+        # ikke en caution-flagg. Kun 'requires_manual_review' (genuint tvetydig →
+        # klassifikatoren overlater til menneske) forblir gul.
         status = (distress.get("status") or "").lower()
         if status in ("distressed", "distress"):
             distress_category = "red"
-        elif status in ("not_distressed", "no_distress", "exempt_young_company"):
+        elif status in (
+            "not_distressed", "no_distress", "not_distressed_partial", "exempt_young_company"
+        ):
             distress_category = "green"
-        elif status in ("not_distressed_partial", "requires_manual_review", "warning", "yellow"):
+        elif status in ("requires_manual_review", "warning", "yellow"):
             distress_category = "yellow"
         else:  # insufficient_data / ukjent
             distress_category = "unknown"
         for rule in (distress.get("rules_fired") or []):
             if isinstance(rule, dict) and rule.get("description"):
                 distress_reasons.append(str(rule["description"]))
+        # Sørg for at en grønn «partial»-vurdering ikke står uten forklaring.
+        if status == "not_distressed_partial" and not distress_reasons:
+            distress_reasons.append(
+                "Ikke i økonomiske vanskeligheter, men vurderingen bygger på "
+                "delvise regnskapsdata (færre år/poster tilgjengelig)."
+            )
 
     # ── KYC-signaler ───────────────────────────────────────────────────
     kyc_block = payload.get("kyc_signals") if isinstance(payload.get("kyc_signals"), dict) else {}

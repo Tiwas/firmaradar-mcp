@@ -61,7 +61,10 @@ def test_distress_category_maps_backend_status_literals():
     cases = {
         "not_distressed": "green",
         "distressed": "red",
-        "not_distressed_partial": "yellow",
+        # «partial»-verdiktet er fortsatt «ikke i vanskeligheter» → grønt, så det
+        # matcher get_risk_score (0 distress-poeng) for samme selskap. QA-funn
+        # 2026-06-22 re-verifisering: gul motsa grønn i risk_score.
+        "not_distressed_partial": "green",
         "requires_manual_review": "yellow",
         "insufficient_data": "unknown",
         "exempt_young_company": "green",
@@ -72,3 +75,14 @@ def test_distress_category_maps_backend_status_literals():
             GetCompanySignalsInput(orgnr="923609016"),
         ))
         assert out.distress_category == expected, f"{status} → {out.distress_category} (forventet {expected})"
+
+
+def test_partial_not_distressed_gets_clarifying_reason():
+    """Grønn «partial»-vurdering uten fyrte regler skal få en forklaring i
+    distress_reasons (QA-funn 2026-06-22: «yellow uten distress_reasons» var rart)."""
+    out = asyncio.run(handle(
+        _StubClient({"orgnr": "823107242", "distress": {"status": "not_distressed_partial"}}),
+        GetCompanySignalsInput(orgnr="823107242"),
+    ))
+    assert out.distress_category == "green"
+    assert out.distress_reasons and "delvise regnskapsdata" in out.distress_reasons[0]
