@@ -54,6 +54,7 @@ from . import (  # noqa: E402
     convert_nok,
     delete_subscription,
     find_related_companies,
+    find_shared_connections,
     get_aml_report,
     get_aml_score,
     get_company,
@@ -102,6 +103,7 @@ ALL_TOOLS: list[ToolHandler] = [
     # Bransje/relasjon (3)
     list_companies_in_nace.HANDLER,
     find_related_companies.HANDLER,
+    find_shared_connections.HANDLER,
     compare_companies.HANDLER,
     # Tverr-søk (1)
     search_announcements.HANDLER,
@@ -159,6 +161,7 @@ TOOL_TITLES: dict[str, str] = {
     "firmaradar_get_recent_changes": "Get Recent Changes",
     "firmaradar_list_companies_in_nace": "List Companies by Industry (NACE)",
     "firmaradar_find_related_companies": "Find Related Companies",
+    "firmaradar_find_shared_connections": "Find Shared Connections",
     "firmaradar_compare_companies": "Compare Companies",
     "firmaradar_search_announcements": "Search Announcements",
     "firmaradar_get_risk_score": "Get Company Risk Score",
