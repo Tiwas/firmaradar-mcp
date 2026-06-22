@@ -83,16 +83,20 @@ async def handle(
             distress_score = float(raw_score) if raw_score is not None else None
         except (TypeError, ValueError):
             distress_score = None
-        # Map server-side status til output-kategori (server: 'distress',
-        # 'no_distress', 'insufficient_data', etc. → green/yellow/red)
+        # Map server-side FIV/distress-status til output-kategori. Backend bruker
+        # 'distressed' / 'not_distressed' / 'not_distressed_partial' /
+        # 'requires_manual_review' / 'insufficient_data' / 'exempt_young_company'.
+        # Den gamle mappingen sjekket 'no_distress' (feil literal) → traff aldri →
+        # alltid 'unknown' (motsa get_risk_score sin not_distressed). Legacy-literals
+        # beholdt som fallback.
         status = (distress.get("status") or "").lower()
-        if status == "distress":
+        if status in ("distressed", "distress"):
             distress_category = "red"
-        elif status == "no_distress":
+        elif status in ("not_distressed", "no_distress", "exempt_young_company"):
             distress_category = "green"
-        elif status in ("warning", "yellow"):
+        elif status in ("not_distressed_partial", "requires_manual_review", "warning", "yellow"):
             distress_category = "yellow"
-        else:
+        else:  # insufficient_data / ukjent
             distress_category = "unknown"
         for rule in (distress.get("rules_fired") or []):
             if isinstance(rule, dict) and rule.get("description"):

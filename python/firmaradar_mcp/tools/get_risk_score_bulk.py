@@ -113,16 +113,19 @@ def _coerce_result(raw: dict[str, Any], fallback_orgnr: str) -> BulkRiskScoreRes
     for c in raw.get("components") or []:
         if not isinstance(c, dict):
             continue
+        # Backend emitterer component_id/max_points (ikke id/max) — les kanonisk
+        # med fallback (samme fiks som get_risk_score).
+        _max = c.get("max_points")
+        if _max is None:
+            _max = c.get("max")
         components.append(
             RiskComponentBrief(
-                id=str(c.get("id", "")),
+                id=str(c.get("component_id") or c.get("id") or ""),
                 label=c.get("label") if isinstance(c.get("label"), str) else None,
                 points=(
                     float(c["points"]) if isinstance(c.get("points"), (int, float)) else None
                 ),
-                max=(
-                    float(c["max"]) if isinstance(c.get("max"), (int, float)) else None
-                ),
+                max=(float(_max) if isinstance(_max, (int, float)) else None),
                 status=c.get("status") if isinstance(c.get("status"), str) else None,
             )
         )

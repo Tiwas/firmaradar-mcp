@@ -53,3 +53,22 @@ def test_omitted_sources_are_none():
     assert out.hiring is None
     assert out.fusjon is None
     assert out.frivillighet is None
+
+
+def test_distress_category_maps_backend_status_literals():
+    """Backend bruker 'not_distressed' (ikke 'no_distress') — QA-funn 2026-06-22 der
+    not_distressed feilaktig ble 'unknown' og motsa get_risk_score."""
+    cases = {
+        "not_distressed": "green",
+        "distressed": "red",
+        "not_distressed_partial": "yellow",
+        "requires_manual_review": "yellow",
+        "insufficient_data": "unknown",
+        "exempt_young_company": "green",
+    }
+    for status, expected in cases.items():
+        out = asyncio.run(handle(
+            _StubClient({"orgnr": "923609016", "distress": {"status": status, "score": 0.1}}),
+            GetCompanySignalsInput(orgnr="923609016"),
+        ))
+        assert out.distress_category == expected, f"{status} → {out.distress_category} (forventet {expected})"

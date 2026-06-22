@@ -55,12 +55,18 @@ async def handle(
     for c in components_raw:
         if not isinstance(c, dict):
             continue
+        # Backend (risikoscoring-extension) emitterer ``component_id``/``max_points``;
+        # den gamle projeksjonen leste ``id``/``max`` → alltid tom id + max=0.
+        # Les kanoniske backend-felt med fallback til de gamle.
+        _max = c.get("max_points")
+        if _max is None:
+            _max = c.get("max", 0)
         components.append(
             RiskComponent(
-                id=str(c.get("id", "")),
+                id=str(c.get("component_id") or c.get("id") or ""),
                 label=str(c.get("label", "")),
                 points=float(c.get("points", 0) or 0),
-                max=float(c.get("max", 0) or 0),
+                max=float(_max or 0),
                 status=c.get("status"),
             )
         )

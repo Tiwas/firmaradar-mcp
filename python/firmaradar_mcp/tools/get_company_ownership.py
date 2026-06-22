@@ -135,7 +135,15 @@ async def handle(
 
     summary = None
     if isinstance(tree.get("owners"), list) and tree["owners"]:
-        summary = f"{len(tree['owners'])} eiere (direction={params.direction})"
+        # Tydeliggjør scope: dette er DIREKTE aksjonærer (selskap, ev. + person),
+        # IKKE full UBO-kjede. Forhindrer forveksling med get_aml_score, som
+        # teller reelle rettighetshavere via transitiv eierskap-traversal.
+        _scope = "direkte eiere (selskap + person)" if params.include_persons else "direkte selskaps-eiere"
+        summary = (
+            f"{len(tree['owners'])} {_scope} (direction={params.direction}) — "
+            "direkte aksjonærer, ikke full UBO-kjede (bruk get_aml_score for "
+            "reelle rettighetshavere/indirekte eiere)"
+        )
     if notes:
         summary = ((summary + ". ") if summary else "") + "; ".join(notes)
 
