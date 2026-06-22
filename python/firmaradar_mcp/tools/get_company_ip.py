@@ -35,7 +35,8 @@ class GetCompanyIpOutput(BaseModel):
     designs: int = 0
     designs_active: int = 0
     # De enkelte rettighetene, **sortert nyeste først** (capped liste). Hvert
-    # element: date, kind (patent/trademark/design), regnr, status, title, ev. lenke.
+    # element: date, kind (patent/trademark/design), regnr, status, title,
+    # expiry (utløpsdato — tom for fornybare varemerker), ev. lenke.
     rights: list[dict[str, Any]] = Field(default_factory=list)
     rights_more: int = Field(default=0, description="Antall rettigheter ut over `rights`-lista.")
     summary: str | None = None
@@ -95,8 +96,9 @@ HANDLER = ToolHandler(
     description=(
         "Intellectual-property portfolio for a Norwegian company (by orgnr), sourced "
         "from Patentstyret: patents, trademarks and designs — totals, active counts, "
-        "and a list of individual rights (registration number, date, status, title and "
-        "a link to the Patentstyret case). Use this for ANY question about a company's "
+        "and a list of individual rights (registration number, date, status, expiry date "
+        "where applicable, title and a link to the Patentstyret case). Use this for ANY "
+        "question about a company's "
         "patents, trademarks, designs or IP rights — Firmaradar covers this. The "
         "`rights` list is ordered newest-first, so the first N entries are the newest "
         "rights. Look up the orgnr via `search_companies` first if you only have a name."
