@@ -96,20 +96,34 @@ async def handle(
         for y in years_raw
         if _year_of(y) is not None
     ]
-    # Bygg kort utviklings-summary for siste 3 år hvis tilgjengelig.
+    # Bygg kort utviklings-summary. Prefiks ALLTID med antall år + spennet, slik at
+    # klienten ikke feilleser `years`-arrayet som «kun 1 år» (QA-funn 2026-06-22:
+    # flere klienter narraterte bare siste-år-linja og rapporterte 1 år selv om
+    # 5 år lå i structuredContent.years).
     summary = None
-    if len(years_parsed) >= 2:
+    if years_parsed:
         sorted_years = sorted(years_parsed, key=lambda y: y.aar)
+        lo, hi = sorted_years[0].aar, sorted_years[-1].aar
+        span = f"{lo}–{hi}" if lo != hi else f"{hi}"
+        prefix = f"{len(years_parsed)} regnskapsår ({span}). "
         latest = sorted_years[-1]
-        prior = sorted_years[-2]
-        if latest.omsetning and prior.omsetning:
-            delta_pct = round((latest.omsetning - prior.omsetning) / prior.omsetning * 100, 1)
-            summary = (
-                f"Omsetning {latest.aar}: {latest.omsetning:,} NOK "
-                f"({'+' if delta_pct >= 0 else ''}{delta_pct}% vs {prior.aar}). "
-                f"Driftsresultat: {latest.driftsresultat:,} NOK." if latest.driftsresultat else
-                f"Omsetning {latest.aar}: {latest.omsetning:,} NOK ({'+' if delta_pct >= 0 else ''}{delta_pct}% vs {prior.aar})."
-            )
+        if len(years_parsed) >= 2:
+            prior = sorted_years[-2]
+            if latest.omsetning and prior.omsetning:
+                delta_pct = round((latest.omsetning - prior.omsetning) / prior.omsetning * 100, 1)
+                trend = (
+                    f"Omsetning {latest.aar}: {latest.omsetning:,} NOK "
+                    f"({'+' if delta_pct >= 0 else ''}{delta_pct}% vs {prior.aar})."
+                )
+                if latest.driftsresultat:
+                    trend += f" Driftsresultat: {latest.driftsresultat:,} NOK."
+                summary = prefix + trend
+            else:
+                summary = prefix
+        elif latest.omsetning:
+            summary = prefix + f"Omsetning {latest.aar}: {latest.omsetning:,} NOK."
+        else:
+            summary = prefix
     return GetCompanyFinancialsOutput(
         orgnr=str(payload.get("orgnr", params.orgnr)),
         regnskapstype=str(payload.get("regnskapstype", params.regnskapstype)),
