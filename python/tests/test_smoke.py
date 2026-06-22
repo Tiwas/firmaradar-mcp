@@ -46,9 +46,10 @@ EXPECTED_TOOL_NAMES = {
     "firmaradar_get_company_signals",
     "firmaradar_check_aml_pep",
     "firmaradar_get_recent_changes",
-    # Bransje/relasjon (3)
+    # Bransje/relasjon (4)
     "firmaradar_list_companies_in_nace",
     "firmaradar_find_related_companies",
+    "firmaradar_find_shared_connections",
     "firmaradar_compare_companies",
     # Tverr-søk (1)
     "firmaradar_search_announcements",
@@ -78,7 +79,7 @@ EXPECTED_TOOL_NAMES = {
 def test_registry_lists_all_tools() -> None:
     names = {tool.name for tool in ALL_TOOLS}
     assert names == EXPECTED_TOOL_NAMES, names.symmetric_difference(EXPECTED_TOOL_NAMES)
-    assert len(ALL_TOOLS) == 32
+    assert len(ALL_TOOLS) == 33
 
 
 def test_every_tool_has_description_and_schemas() -> None:
@@ -237,7 +238,7 @@ def test_no_tool_uses_json_kwarg_on_client_post() -> None:
 # Ingen verktøy er lenger *rent* deferred — alle gjør reelle API-kall. Det
 # eneste gjenværende deferrede er én *modus*: ``find_related_companies`` med
 # via=owner (krever UBO-graf-traversal, deferred til v0.3). Den dekkes av den
-# fokuserte testen under; alle 31 verktøy har korrekt handler-signatur.
+# fokuserte testen under; alle 33 verktøy har korrekt handler-signatur.
 async def test_find_related_companies_owner_mode_is_deferred() -> None:
     """``find_related_companies`` er implementert for via=person/address, men
     via=owner er deferred (krever UBO-graf-traversal) og skal raise
@@ -375,8 +376,9 @@ def _placeholder_for(field_name: str) -> object:
 
 
 # ── Regresjon: timeout_s-videresending (innført + fikset 2026-05-30) ──────────
-# get_aml_score er det eneste tunge verktøyet og fikk en per-kall timeout på
-# 60s (stopgap mot kø-timeout under batch). Plumbingen går tool → client.post →
+# get_aml_score er det eneste tunge verktøyet og har en per-kall timeout
+# (nå 25s sync-først + async-fallback, A2/v0.5.10; opprinnelig 60s stopgap mot
+# kø-timeout under batch). Plumbingen går tool → client.post →
 # _DispatchingClient.post → FirmaradarClient.post → httpx. _DispatchingClient
 # ble først deployet UTEN timeout_s-param → ALLE get_aml_score-kall feilet med
 # 'unexpected keyword argument timeout_s'. Disse låser kontrakten på hvert lag.
@@ -394,7 +396,9 @@ async def test_get_aml_score_passes_timeout_s_to_client() -> None:
 
     await handle(_FakeClient(), GetAmlScoreInput(orgnr="923609016", purpose="manual"))
     assert captured["timeout_s"] == AML_SCORE_TIMEOUT_S
-    assert AML_SCORE_TIMEOUT_S >= 60.0
+    # A2 (v0.5.10, 961dc8d2): sync-først bruker kort 25s timeout + async-fallback
+    # (var 60s blokkerende). Sjekk kun at det er en fornuftig positiv timeout.
+    assert AML_SCORE_TIMEOUT_S >= 20.0
 
 
 async def test_firmaradar_client_post_forwards_timeout_s(

@@ -22,7 +22,7 @@ matching, group analytics) so a single call returns a **decision-ready** view,
 not a raw registry record.
 
 This Skill helps you pick the correct `firmaradar_*` tool, in the correct order,
-with the correct input formats. The connector exposes 31 tools; the rules below
+with the correct input formats. The connector exposes 33 tools; the rules below
 are the non-obvious ones that prevent failed or wrong-tool calls.
 
 ## When to use Firmaradar
