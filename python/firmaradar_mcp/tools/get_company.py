@@ -90,6 +90,33 @@ class GetCompanyOutput(BaseModel):
     )
 
 
+def _annotate_oppstillingsplan(fm: dict[str, Any] | None) -> dict[str, Any] | None:
+    """Legg på en lesbar forklaring av ``oppstillingsplan`` slik at LLM-klienter
+    ikke forveksler BRREG-regnskapsformatet («store»/«smaa») med selskapsstørrelse
+    (regnskapsloven-kategorien mikro/liten/stor). QA-funn 2026-06-22 (ChatGPT):
+    ``oppstillingsplan="store"`` ved siden av ``kategori="mikro"`` så forvirrende ut.
+
+    Ikke-muterende: returnerer en kopi. Rå-verdien beholdes uendret (web-UI og andre
+    konsumenter er upåvirket); kun et additivt ``oppstillingsplan_forklaring``-felt.
+    """
+    if not isinstance(fm, dict) or "oppstillingsplan" not in fm:
+        return fm
+    val = str(fm.get("oppstillingsplan") or "").strip().lower()
+    _NOTE = " (BRREG-regnskapsoppstillingsformat — IKKE selskapsstørrelse; se foretaksklassifisering.regnskapsloven for størrelse)"
+    labels = {
+        "store": "Stor oppstillingsplan" + _NOTE,
+        "stor": "Stor oppstillingsplan" + _NOTE,
+        "smaa": "Liten oppstillingsplan" + _NOTE,
+        "små": "Liten oppstillingsplan" + _NOTE,
+        "full": "Full oppstillingsplan" + _NOTE,
+    }
+    out = dict(fm)
+    out["oppstillingsplan_forklaring"] = labels.get(
+        val, "BRREG-regnskapsoppstillingsformat — IKKE selskapsstørrelse"
+    )
+    return out
+
+
 async def handle(client: FirmaradarClient, params: GetCompanyInput) -> GetCompanyOutput:
     qp: dict[str, Any] = {}
     if params.fields:
@@ -133,7 +160,7 @@ async def handle(client: FirmaradarClient, params: GetCompanyInput) -> GetCompan
         tildelinger=raw_tildelinger,
         brreg_tildelinger=payload.get("brreg_tildelinger"),
         endringer=payload.get("endringer"),
-        financial_metrics=payload.get("financial_metrics"),
+        financial_metrics=_annotate_oppstillingsplan(payload.get("financial_metrics")),
         ip_rettigheter=payload.get("ip_rettigheter"),
         foretaksklassifisering=payload.get("foretaksklassifisering"),
         summary=summary,
