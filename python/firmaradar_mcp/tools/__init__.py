@@ -46,6 +46,7 @@ class ToolHandler:
 # ---------------------------------------------------------------------------
 
 from . import (  # noqa: E402
+    add_company_monitoring,
     check_aml_pep,
     check_fiv_bulk,
     check_foretak_i_vanskeligheter,
@@ -127,6 +128,7 @@ ALL_TOOLS: list[ToolHandler] = [
     subscribe_nace.HANDLER,
     list_my_subscriptions.HANDLER,
     delete_subscription.HANDLER,
+    add_company_monitoring.HANDLER,
 ]
 
 
@@ -178,6 +180,7 @@ TOOL_TITLES: dict[str, str] = {
     "firmaradar_subscribe_nace": "Subscribe to Industry Monitoring (NACE)",
     "firmaradar_list_my_subscriptions": "List My Industry Subscriptions",
     "firmaradar_delete_subscription": "Delete Industry Subscription",
+    "firmaradar_add_company_monitoring": "Add Company to Monitoring",
 }
 
 # Tools that mutate state (not read-only). Everything else is a pure lookup and
@@ -197,6 +200,7 @@ WRITE_TOOLS: frozenset[str] = frozenset({
     "firmaradar_confirm_risk_score_disclaimer",
     "firmaradar_subscribe_nace",
     "firmaradar_delete_subscription",
+    "firmaradar_add_company_monitoring",
 })
 
 # Tools that can write to public internet state or external third-party

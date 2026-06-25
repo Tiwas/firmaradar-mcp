@@ -73,13 +73,14 @@ EXPECTED_TOOL_NAMES = {
     "firmaradar_subscribe_nace",
     "firmaradar_list_my_subscriptions",
     "firmaradar_delete_subscription",
+    "firmaradar_add_company_monitoring",
 }
 
 
 def test_registry_lists_all_tools() -> None:
     names = {tool.name for tool in ALL_TOOLS}
     assert names == EXPECTED_TOOL_NAMES, names.symmetric_difference(EXPECTED_TOOL_NAMES)
-    assert len(ALL_TOOLS) == 33
+    assert len(ALL_TOOLS) == 34
 
 
 def test_every_tool_has_description_and_schemas() -> None:
@@ -119,6 +120,7 @@ def test_write_and_destructive_tool_sets() -> None:
         "firmaradar_confirm_risk_score_disclaimer",
         "firmaradar_subscribe_nace",
         "firmaradar_delete_subscription",
+        "firmaradar_add_company_monitoring",
     }
     assert WRITE_TOOLS <= names, WRITE_TOOLS - names
     assert OPEN_WORLD_TOOLS == frozenset()

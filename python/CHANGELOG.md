@@ -11,6 +11,18 @@ workflow-nodene på samme funksjonalitets-baseline.
 
 ---
 
+## [Unreleased]
+
+### Added
+
+- **`firmaradar_add_company_monitoring` tool.** Add a Norwegian company (by
+  9-digit orgnr) to the user's company-monitoring list. New targets monitor
+  all announcement categories by default; `ip_alerts` (default `true`) also
+  enables IP-change alerts when the account has the IP-monitoring add-on.
+  Backed by `POST /monitoring/targets/add` (now accepts a JSON body).
+
+---
+
 ## [0.5.1] — 2026-06-01
 
 ### Removed

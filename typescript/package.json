@@ -30,6 +30,9 @@
     "typescript": "^5.4.0",
     "vitest": "^4.1.0"
   },
+  "overrides": {
+    "hono": "^4.12.25"
+  },
   "publishConfig": {
     "access": "restricted"
   },

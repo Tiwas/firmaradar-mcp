@@ -20,6 +20,10 @@ from firmaradar_mcp.tools.confirm_risk_score_disclaimer import (
     ConfirmRiskScoreDisclaimerInput,
     handle as conf_handle,
 )
+from firmaradar_mcp.tools.add_company_monitoring import (
+    AddCompanyMonitoringInput,
+    handle as add_mon_handle,
+)
 
 
 class _Stub:
@@ -104,3 +108,23 @@ def test_confirm_disclaimer_idempotent_replay():
                   "audit_id": None, "idempotent": True})
     out = asyncio.run(conf_handle(stub, ConfirmRiskScoreDisclaimerInput()))
     assert out.idempotent is True and out.audit_id is None
+
+
+# ── add_company_monitoring ──────────────────────────────────────────────────
+
+def test_add_company_monitoring_defaults_ip_alerts_on():
+    # Default = «alt på»: orgnr + ip_alerts=on (kategorier er alle backend-side).
+    stub = _Stub({"ok": True, "orgnr": "923609016", "ip_alerts_enabled": True})
+    out = asyncio.run(add_mon_handle(stub, AddCompanyMonitoringInput(orgnr="923609016")))
+    assert stub.calls[0][:2] == ("POST", "/monitoring/targets/add")
+    assert stub.calls[0][2] == {"orgnr": "923609016", "ip_alerts": "on"}
+    assert out.ok is True and out.orgnr == "923609016" and out.ip_alerts_enabled is True
+
+
+def test_add_company_monitoring_ip_alerts_false_omits_flag():
+    stub = _Stub({"ok": True, "orgnr": "923609016", "ip_alerts_enabled": False})
+    out = asyncio.run(
+        add_mon_handle(stub, AddCompanyMonitoringInput(orgnr="923609016", ip_alerts=False))
+    )
+    assert stub.calls[0][2] == {"orgnr": "923609016"}
+    assert out.ok is True and out.ip_alerts_enabled is False
