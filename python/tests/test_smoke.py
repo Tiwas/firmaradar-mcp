@@ -237,34 +237,60 @@ def test_no_tool_uses_json_kwarg_on_client_post() -> None:
     assert not offenders, f"tools som bruker json= i stedet for json_body=: {offenders}"
 
 
-# Ingen verktøy er lenger *rent* deferred — alle gjør reelle API-kall. Det
-# eneste gjenværende deferrede er én *modus*: ``find_related_companies`` med
-# via=owner (krever UBO-graf-traversal, deferred til v0.3). Den dekkes av den
-# fokuserte testen under; alle 33 verktøy har korrekt handler-signatur.
-async def test_find_related_companies_owner_mode_is_deferred() -> None:
-    """``find_related_companies`` er implementert for via=person/address, men
-    via=owner er deferred (krever UBO-graf-traversal) og skal raise
-    NotImplementedError med en hjelpende workaround-melding — uten å treffe
-    REST-API-et, siden sjekken skjer før nettverkskallet."""
-    import os
-    os.environ.setdefault("FIRMARADAR_API_KEY", "test-key-for-test-only")
-    from firmaradar_mcp.client import FirmaradarClient
+# Ingen verktøy er lenger deferred — alle gjør reelle API-kall, inkludert
+# ``find_related_companies`` med via=owner (traversal på den eksisterende
+# aksjeeierbok-eierskapsgrafen; RRH/UBO-gjennomskjæring lander med BRREG-scopet).
+# Den fokuserte testen under låser at via=owner nå treffer REST-API-et og
+# mapper responsen — ingen NotImplementedError lenger.
+async def test_find_related_companies_owner_mode_hits_api() -> None:
+    """``find_related_companies`` med via=owner skal nå routes til
+    ``GET /api/v1/company/<orgnr>/related?via=owner`` og mappe delt-eier-
+    treffene til RelatedCompany, IKKE raise NotImplementedError."""
     from firmaradar_mcp.tools.find_related_companies import (
         FindRelatedCompaniesInput,
         handle,
     )
 
-    client = FirmaradarClient()
-    try:
-        params = FindRelatedCompaniesInput(orgnr="123456789", via="owner")
-        with pytest.raises(NotImplementedError) as exc_info:
-            await handle(client, params)
-        msg = str(exc_info.value).lower()
-        assert "v0.3" in msg or "owner" in msg, (
-            "NotImplementedError-meldingen bør forklare at via=owner er deferred"
-        )
-    finally:
-        await client.aclose()
+    class _StubClient:
+        def __init__(self):
+            self.last_path = None
+            self.last_params = None
+
+        async def get(self, path, params=None):
+            self.last_path = path
+            self.last_params = params
+            return {
+                "orgnr": "123456789",
+                "via": "owner",
+                "related": [
+                    {
+                        "orgnr": "999888777",
+                        "navn": "Delt Eier AS",
+                        "relation_strength": 2,
+                        "shared_entities": [
+                            {"type": "owner", "owner_type": "business",
+                             "name": "Holding AS", "ownership_pct": 55.0},
+                        ],
+                    },
+                ],
+                "total_count": 1,
+            }
+
+    client = _StubClient()
+    params = FindRelatedCompaniesInput(orgnr="123456789", via="owner", min_overlap=2)
+    out = await handle(client, params)
+
+    assert client.last_path == "/api/v1/company/123456789/related"
+    assert client.last_params["via"] == "owner"
+    assert client.last_params["min_overlap"] == 2
+    assert out.via == "owner"
+    assert out.total_count == 1
+    assert len(out.related) == 1
+    rel = out.related[0]
+    assert rel.orgnr == "999888777"
+    assert rel.navn == "Delt Eier AS"
+    assert rel.relation_strength == 2
+    assert rel.shared_entities[0]["owner_type"] == "business"
 
 
 @pytest.mark.parametrize(
@@ -341,16 +367,6 @@ def test_server_module_imports() -> None:
 
 # ---------------------------------------------------------------------------
 # Helpers
-# ---------------------------------------------------------------------------
-
-def _minimal_payload(schema):
-    """Return an instance of ``schema`` with placeholder values for required fields."""
-    placeholders: dict[str, object] = {}
-    for field_name, field in schema.model_fields.items():
-        if not field.is_required():
-            continue
-        placeholders[field_name] = _placeholder_for(field_name)
-    return schema(**placeholders)
 
 
 def _placeholder_for(field_name: str) -> object:

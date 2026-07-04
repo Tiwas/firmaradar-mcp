@@ -10,7 +10,7 @@ Bruk når et selskap er stort/komplekst nok til at den synkrone
 ``get_aml_score`` time-er ut, eller når du vil starte mange rapporter
 parallelt og hente dem senere. Poll status med ``get_aml_report``.
 
-Backend: ``POST /api/v1/aml/report`` (backups/deleted/2026-06-18-plans-todo-opprydding/plans/arkitektur/AML_SCORE_PERF_PLAN.md §8).
+Backend: ``POST /api/v1/aml/report`` (AML_SCORE_PERF_PLAN §8, arkivert).
 """
 
 from __future__ import annotations

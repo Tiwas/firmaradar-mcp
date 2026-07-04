@@ -3,9 +3,14 @@
 Find companies related to a given orgnr via shared person, shared
 address, or shared owner-group.
 
-Backend status: **READY (v0.2)** — via=person + via=address backed by
-``GET /api/v1/company/<orgnr>/related?via=...`` (commit 2026-05-26).
-via=owner deferred to v0.3 (krever UBO-graph traversal).
+Backend status: **READY** — via=person, via=address AND via=owner backed by
+``GET /api/v1/company/<orgnr>/related?via=...``. via=owner traverses the
+existing shareholder-book ownership graph (aksjeeierbok / ownership_pg) and
+returns companies sharing significant owners (>=10%) with the input company —
+same data source and threshold as find_shared_connections' shared-owner
+analysis. Full RRH/UBO ultimate-owner traversal (piercing holding structures)
+lands when the BRREG RRH scope ships; until then direct shareholder ownership
+is used.
 """
 
 from __future__ import annotations
@@ -24,7 +29,8 @@ class FindRelatedCompaniesInput(BaseModel):
         description=(
             "'person' = shared board members/shareholders. "
             "'address' = same forretningsadresse. "
-            "'owner' = same ultimate beneficial owner (heavier — owner-graph traversal)."
+            "'owner' = shares significant owners (>=10%) via the shareholder-book "
+            "ownership graph (heavier — owner-graph traversal)."
         )
     )
     limit: int = Field(default=25, ge=1, le=100)
@@ -52,14 +58,6 @@ class FindRelatedCompaniesOutput(BaseModel):
 async def handle(
     client: FirmaradarClient, params: FindRelatedCompaniesInput
 ) -> FindRelatedCompaniesOutput:
-    if params.via == "owner":
-        raise NotImplementedError(
-            "via=owner er ikke tilgjengelig i v0.2 — krever UBO-graf-"
-            "traversal og er deferred til v0.3. Bruk via=person eller "
-            "via=address; eller kombiner med get_company_ownership"
-            "(direction=up) for å traversere manuelt."
-        )
-
     qp: dict[str, Any] = {
         "via": params.via,
         "limit": params.limit,
