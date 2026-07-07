@@ -13,6 +13,18 @@ workflow-nodene på samme funksjonalitets-baseline.
 
 ## [Unreleased]
 
+### Changed
+
+- **`firmaradar_get_aml_score` now uses the async report flow directly.**
+  The synchronous backend endpoint `POST /api/v1/aml/score` was deprecated
+  (2026-07-07) and now responds `202 Accepted` with a report id. The tool
+  therefore starts the report via `POST /api/v1/aml/report` and polls the
+  status endpoint within a bounded budget — the previous sync-first attempt
+  (A2, v0.5.10) is removed. For large/complex ownership structures the tool
+  can return `level="pending"` with a `rapport_id`; poll
+  `firmaradar_get_aml_report` until the status is terminal. `factors` is now
+  always empty — factor-level detail lives in the stored report links.
+
 ### Added
 
 - **`firmaradar_add_company_monitoring` tool.** Add a Norwegian company (by

@@ -100,7 +100,7 @@ Hent API-nøkkel: **[firmaradar.no/min-side/api-keys](https://firmaradar.no/min-
 
 ### KYC og AML
 - `firmaradar_check_aml_pep` — full AML/PEP-screening med sanksjonslister og revisjonsspor
-- `firmaradar_get_aml_score` — strukturert AML-risikoscore (0–100) med faktor-breakdown og revisjonsspor
+- `firmaradar_get_aml_score` — strukturert AML-risikoscore (0–100) med revisjonsspor (async rapport-flyt; faktor-detaljer i den lagrede rapporten)
 
 ### Bransje og overvåkning
 - `firmaradar_list_companies_in_nace` — alle selskaper i en NACE-kode med geografisk filter

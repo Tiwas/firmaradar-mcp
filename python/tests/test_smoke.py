@@ -394,29 +394,46 @@ def _placeholder_for(field_name: str) -> object:
 
 
 # ── Regresjon: timeout_s-videresending (innført + fikset 2026-05-30) ──────────
-# get_aml_score er det eneste tunge verktøyet og har en per-kall timeout
-# (nå 25s sync-først + async-fallback, A2/v0.5.10; opprinnelig 60s stopgap mot
-# kø-timeout under batch). Plumbingen går tool → client.post →
-# _DispatchingClient.post → FirmaradarClient.post → httpx. _DispatchingClient
-# ble først deployet UTEN timeout_s-param → ALLE get_aml_score-kall feilet med
-# 'unexpected keyword argument timeout_s'. Disse låser kontrakten på hvert lag.
+# Plumbingen går tool → client.post → _DispatchingClient.post →
+# FirmaradarClient.post → httpx. _DispatchingClient ble først deployet UTEN
+# timeout_s-param → alle kall med per-kall-timeout feilet med 'unexpected
+# keyword argument timeout_s'. Kontrakten låses fortsatt på klient-lagene
+# under, selv om get_aml_score (den opprinnelige brukeren, sync-først A2/
+# v0.5.10) ble lagt om til ren async rapport-flyt 2026-07-07 (aml/score-
+# deprecering) og ikke lenger sender timeout_s selv — andre tunge verktøy
+# kan trenge den, og plumbingen skal ikke regressere stille.
 
-async def test_get_aml_score_passes_timeout_s_to_client() -> None:
-    from firmaradar_mcp.tools.get_aml_score import (
-        handle, GetAmlScoreInput, AML_SCORE_TIMEOUT_S,
-    )
+async def test_get_aml_score_starts_async_report_flow() -> None:
+    """aml/score-deprecering (2026-07-07): verktøyet skal gå RETT på async
+    rapport-flyten (POST /api/v1/aml/report + DPA-headere) og ALDRI kalle
+    den deprecerte synkrone /api/v1/aml/score-ruta."""
+    from firmaradar_mcp.tools import get_aml_score as _mod
+    from firmaradar_mcp.tools.get_aml_score import handle, GetAmlScoreInput
+
     captured: dict = {}
 
     class _FakeClient:
         async def post(self, path, json_body=None, *, extra_headers=None, timeout_s=None):
-            captured["timeout_s"] = timeout_s
-            return {"orgnr": "923609016", "score": 25, "level": "low", "rapport": {}}
+            captured["post_path"] = path
+            captured["extra_headers"] = extra_headers
+            return {"rapport_id": "a" * 32, "status": "pending"}
 
-    await handle(_FakeClient(), GetAmlScoreInput(orgnr="923609016", purpose="manual"))
-    assert captured["timeout_s"] == AML_SCORE_TIMEOUT_S
-    # A2 (v0.5.10, 961dc8d2): sync-først bruker kort 25s timeout + async-fallback
-    # (var 60s blokkerende). Sjekk kun at det er en fornuftig positiv timeout.
-    assert AML_SCORE_TIMEOUT_S >= 20.0
+        async def get(self, path, params=None):
+            captured["get_path"] = path
+            return {"status": "done", "orgnr": "923609016", "score": 25,
+                    "level": "low", "rapport_id": "a" * 32}
+
+    # Krymp poll-intervallet så testen ikke sover 3s.
+    orig = (_mod._ASYNC_POLL_BUDGET_S, _mod._ASYNC_POLL_INTERVAL_S)
+    _mod._ASYNC_POLL_BUDGET_S, _mod._ASYNC_POLL_INTERVAL_S = 0.05, 0.01
+    try:
+        out = await handle(_FakeClient(), GetAmlScoreInput(orgnr="923609016", purpose="manual"))
+    finally:
+        _mod._ASYNC_POLL_BUDGET_S, _mod._ASYNC_POLL_INTERVAL_S = orig
+    assert captured["post_path"] == "/api/v1/aml/report"
+    assert captured["extra_headers"]["X-FR-DPA-Confirmed"] == "true"
+    assert captured["get_path"] == "/api/v1/aml/report/" + "a" * 32
+    assert out.score == 25 and out.level == "low"
 
 
 async def test_firmaradar_client_post_forwards_timeout_s(

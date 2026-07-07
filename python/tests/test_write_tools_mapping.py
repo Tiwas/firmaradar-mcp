@@ -34,8 +34,13 @@ class _Stub:
         self._raise = raise_exc
         self.calls = []
 
-    async def post(self, path, json_body=None, params=None):
+    async def post(self, path, json_body=None, params=None, *,
+                   extra_headers=None, timeout_s=None):
+        # extra_headers/timeout_s speiler FirmaradarClient.post-signaturen —
+        # start_aml_report sender DPA-headere (X-FR-Purpose/X-FR-DPA-Confirmed)
+        # og stubben må akseptere dem (TypeError uten, observert 2026-07-07).
         self.calls.append(("POST", path, json_body))
+        self.last_extra_headers = extra_headers
         if self._raise:
             raise self._raise
         return self._response
