@@ -10,12 +10,13 @@ Bruk når et selskap er stort/komplekst nok til at den synkrone
 ``get_aml_score`` time-er ut, eller når du vil starte mange rapporter
 parallelt og hente dem senere. Poll status med ``get_aml_report``.
 
-Backend: ``POST /api/v1/aml/report`` (AML_SCORE_PERF_PLAN §8, arkivert).
+Backend: ``POST /api/v1/aml/report`` (async-plan §8, arkivert i backups/deleted/2026-06-18-plans-todo-opprydding/plans/arkitektur/AML_SCORE_PERF_PLAN.md).
 """
 
 from __future__ import annotations
 
 from typing import Any, Literal
+from urllib.parse import quote
 
 from pydantic import BaseModel, Field
 
@@ -53,6 +54,11 @@ async def handle(
     payload = await client.post(
         "/api/v1/aml/report",
         json_body={"orgnr": params.orgnr, "purpose": params.purpose},
+        extra_headers={
+            "X-FR-Purpose": quote(params.purpose, safe=""),
+            "X-FR-Purpose-Encoding": "url",
+            "X-FR-DPA-Confirmed": "true",
+        },
     )
     if not isinstance(payload, dict):
         payload = {}

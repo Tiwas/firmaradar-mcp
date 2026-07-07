@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import asyncio
 from typing import Any, Literal
+from urllib.parse import quote
 
 from pydantic import BaseModel, Field
 
@@ -115,6 +116,11 @@ async def _async_fallback(
     start = await client.post(
         "/api/v1/aml/report",
         json_body={"orgnr": params.orgnr, "purpose": params.purpose},
+        extra_headers={
+            "X-FR-Purpose": quote(params.purpose, safe=""),
+            "X-FR-Purpose-Encoding": "url",
+            "X-FR-DPA-Confirmed": "true",
+        },
     )
     start = start if isinstance(start, dict) else {}
     report_id = start.get("rapport_id") or start.get("report_id")
@@ -166,6 +172,11 @@ async def handle(
             "/api/v1/aml/score",
             json_body={"orgnr": params.orgnr, "purpose": params.purpose},
             timeout_s=AML_SCORE_TIMEOUT_S,
+            extra_headers={
+                "X-FR-Purpose": quote(params.purpose, safe=""),
+                "X-FR-Purpose-Encoding": "url",
+                "X-FR-DPA-Confirmed": "true",
+            },
         )
     except FirmaradarClientError as exc:
         if not _is_upstream_timeout(exc):

@@ -5,7 +5,7 @@ Poller status/resultat for en asynkron AML-rapport startet med
 ``done`` / ``failed``). Når ``done`` inkluderes score, level og lenker
 til den ferdige rapporten; når ``failed`` inkluderes en feilmelding.
 
-Backend: ``GET /api/v1/aml/report/<report_id>`` (AML_SCORE_PERF_PLAN §8, arkivert).
+Backend: ``GET /api/v1/aml/report/<report_id>`` (async-plan §8, arkivert i backups/deleted/2026-06-18-plans-todo-opprydding/plans/arkitektur/AML_SCORE_PERF_PLAN.md).
 """
 
 from __future__ import annotations

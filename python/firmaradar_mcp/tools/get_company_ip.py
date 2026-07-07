@@ -43,9 +43,9 @@ class GetCompanyIpOutput(BaseModel):
 
 
 async def handle(client: FirmaradarClient, params: GetCompanyIpInput) -> GetCompanyIpOutput:
-    payload = await client.get(
-        f"/api/v1/company/{params.orgnr}", params={"fields": "ip"}
-    )
+    # Dedikert /ip-rute (renere enn ?fields=ip på Get Company). Returnerer
+    # {orgnr, navn, ip_rettigheter} — samme ip_rettigheter-struktur som før.
+    payload = await client.get(f"/api/v1/company/{params.orgnr}/ip")
     if not isinstance(payload, dict):
         payload = {}
     ip = payload.get("ip_rettigheter")
