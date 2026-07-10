@@ -475,3 +475,55 @@ def test_dispatching_client_forwards_timeout_s() -> None:
         "_DispatchingClient.post videresender ikke timeout_s — "
         "get_aml_score vil feile med TypeError før HTTP-kallet"
     )
+
+
+async def test_get_person_surfaces_konkurs_eksponering() -> None:
+    """``get_person`` skal løfte backendens ``konkurs_eksponering`` inn i
+    output-en for rolle-personer — flagg-for-gjennomgang-signalet fra den
+    daterte rollehistorikken."""
+    from firmaradar_mcp.tools.get_person import GetPersonInput, handle
+
+    class _StubClient:
+        async def get(self, path, params=None):
+            assert path.startswith("/api/v1/person/roles/")
+            return {
+                "name": "Ola Nordmann",
+                "birth_year": 1970,
+                "companies": [
+                    {"orgnr": "111111111", "company_name": "Aktiv AS", "active": True,
+                     "rolle_type": "Styrets leder"},
+                ],
+                "konkurs_eksponering": {
+                    "antall_konkursforetak": 2,
+                    "foretak": [
+                        {"orgnr": "222222222", "rolletype": "Styrets leder",
+                         "konkursdato": "2022-05-01", "tiltradt": "2018-01-01",
+                         "tenure_days": 1000},
+                        {"orgnr": "333333333", "rolletype": "Daglig leder",
+                         "konkursdato": "2020-03-01", "tiltradt": "2015-06-01",
+                         "tenure_days": 1200},
+                    ],
+                    "note": "Navnematch uten fødselsnummer — flagg for gjennomgang.",
+                },
+            }
+
+    out = await handle(_StubClient(), GetPersonInput(person_id="role-" + "a" * 24))
+    assert out.konkurs_eksponering.get("antall_konkursforetak") == 2
+    assert len(out.konkurs_eksponering.get("foretak") or []) == 2
+    assert "flagg" in (out.konkurs_eksponering.get("note") or "").lower()
+
+
+async def test_get_person_no_konkurs_eksponering_stays_empty() -> None:
+    """Uten treff (eller antall=0) skal feltet forbli tomt, ikke støy."""
+    from firmaradar_mcp.tools.get_person import GetPersonInput, handle
+
+    class _StubClient:
+        async def get(self, path, params=None):
+            return {
+                "name": "Kari Ren",
+                "companies": [],
+                "konkurs_eksponering": {"antall_konkursforetak": 0, "foretak": [], "note": ""},
+            }
+
+    out = await handle(_StubClient(), GetPersonInput(person_id="role-" + "b" * 24))
+    assert out.konkurs_eksponering == {}

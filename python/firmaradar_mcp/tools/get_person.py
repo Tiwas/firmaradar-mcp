@@ -43,6 +43,11 @@ class GetPersonOutput(BaseModel):
     active_roles: list[dict[str, Any]] = Field(default_factory=list)
     shareholdings: list[dict[str, Any]] = Field(default_factory=list)
     aml_pep_hits: list[dict[str, Any]] = Field(default_factory=list)
+    # Name-based bankruptcy exposure ("konkursgjenganger"): leadership roles this
+    # person held in companies that later went bankrupt, tenure-weighted, from the
+    # dated role history. Since the match is by NAME (no national ID number), this
+    # is a REVIEW FLAG, not a verdict — `note` carries that framing.
+    konkurs_eksponering: dict[str, Any] = Field(default_factory=dict)
 
 
 async def handle(
@@ -60,6 +65,7 @@ async def handle(
     birth_year: int | None = None
     active_roles: list[dict[str, Any]] = []
     shareholdings: list[dict[str, Any]] = []
+    konkurs_eksponering: dict[str, Any] = {}
 
     # Hvilken type ID er det? Avgjør hvilke endepunkter vi kaller.
     is_role = pid.startswith("role-")
@@ -73,6 +79,9 @@ async def handle(
                 # "companies" + "birth_year" + "role_types[]". Tool-stub
                 # antok "navn" + "roles" — schema-mismatch.
                 navn = roles_payload.get("name") or roles_payload.get("navn") or navn
+                ke = roles_payload.get("konkurs_eksponering")
+                if isinstance(ke, dict) and ke.get("antall_konkursforetak"):
+                    konkurs_eksponering = ke
                 by_raw = roles_payload.get("birth_year")
                 if by_raw is not None:
                     try:
@@ -129,6 +138,7 @@ async def handle(
         active_roles=active_roles,
         shareholdings=shareholdings,
         aml_pep_hits=[],  # eget tool, ikke fan-out her — sparer rate-limit
+        konkurs_eksponering=konkurs_eksponering,
     )
 
 
@@ -136,9 +146,13 @@ HANDLER = ToolHandler(
     name="firmaradar_get_person",
     description=(
         "Aggregated person profile: name, birth year, active roles, "
-        "shareholdings and any AML/PEP risk hits. Strict PII-sensitive — "
-        "requires search_full_enabled tier and F10.11 purpose confirmation. "
-        "Minors are blocked except for super-admin accounts."
+        "shareholdings and any AML/PEP risk hits. Also returns "
+        "`konkurs_eksponering` — leadership roles the person held in companies "
+        "that later went bankrupt (tenure-weighted, from the dated role "
+        "history). That match is name-based (no national ID), so it is a "
+        "REVIEW FLAG to verify, not a verdict. Strict PII-sensitive — requires "
+        "search_full_enabled tier and F10.11 purpose confirmation. Minors are "
+        "blocked except for super-admin accounts."
     ),
     input_schema=GetPersonInput,
     output_schema=GetPersonOutput,
