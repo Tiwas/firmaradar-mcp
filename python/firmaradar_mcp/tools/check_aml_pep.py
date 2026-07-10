@@ -21,7 +21,7 @@ DO NOT call this tool.
 
 from __future__ import annotations
 
-from typing import Literal
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
@@ -67,6 +67,18 @@ class AmlPepHit(BaseModel):
     # confirmed same-entity hit — verify manually, never treat as authoritative.
     weak_match: bool = False
     ekstern_id: str | None = None
+    # PEP context — populated only for `kategori == "pep"` hits (None for sanctions).
+    # `pep_status` ∈ {aktiv, tidligere, historisk}; `embete` is the class-level office
+    # (e.g. "Statsråd/minister"); `verv_fra`/`verv_til` are the collapsed ISO period.
+    pep_status: str | None = None
+    embete: str | None = None
+    verv_fra: str | None = None
+    verv_til: str | None = None
+    # Full date-stamped office timeline (one row per position period, P580/P582
+    # preserved): [{embete, klasse, tittel, pos_qid, fra, til}]. `tittel` is the
+    # specific position label ("næringsminister") when resolved; empty for sanctions
+    # and for PEP rows seeded before title enrichment.
+    verv_historikk: list[dict[str, Any]] = Field(default_factory=list)
 
 
 class CheckAmlPepOutput(BaseModel):
