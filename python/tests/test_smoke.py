@@ -42,9 +42,10 @@ EXPECTED_TOOL_NAMES = {
     "firmaradar_get_person",
     "firmaradar_get_person_roles",
     "firmaradar_get_person_companies",
-    # Risikosignaler (3)
+    # Risikosignaler (4)
     "firmaradar_get_company_signals",
     "firmaradar_check_aml_pep",
+    "firmaradar_check_konkurs_eksponering",
     "firmaradar_get_recent_changes",
     # Bransje/relasjon (4)
     "firmaradar_list_companies_in_nace",
@@ -80,7 +81,7 @@ EXPECTED_TOOL_NAMES = {
 def test_registry_lists_all_tools() -> None:
     names = {tool.name for tool in ALL_TOOLS}
     assert names == EXPECTED_TOOL_NAMES, names.symmetric_difference(EXPECTED_TOOL_NAMES)
-    assert len(ALL_TOOLS) == 34
+    assert len(ALL_TOOLS) == 35
 
 
 def test_every_tool_has_description_and_schemas() -> None:
@@ -527,3 +528,74 @@ async def test_get_person_no_konkurs_eksponering_stays_empty() -> None:
 
     out = await handle(_StubClient(), GetPersonInput(person_id="role-" + "b" * 24))
     assert out.konkurs_eksponering == {}
+
+
+async def test_get_person_shareholder_key_surfaces_navn_and_konkurs() -> None:
+    """Aksjonær-nøkkel (``person-YYYY-…``): aksjeeier-recorden bruker
+    ``owner_name`` (ikke ``name``). Uten owner_name-fallbacken ble navn=""
+    → konkurs-eksponering-matchen feilet. Regresjon for
+    `person-2025-110a167ab75b76464b231f5f` (Karl Petter Ulriksen → 3 foretak)."""
+    from firmaradar_mcp.tools.get_person import GetPersonInput, handle
+
+    class _StubClient:
+        async def get(self, path, params=None):
+            assert path.startswith("/api/v1/person/shareholdings/")
+            return {
+                "owner_name": "KARL PETTER ULRIKSEN",
+                "birth_year": 1973,
+                "shareholdings": [
+                    {"child_orgnr": "991045368", "company_name": "FRIHETEN INVEST AS",
+                     "ownership_pct": 100.0},
+                ],
+                "konkurs_eksponering": {
+                    "antall_konkursforetak": 3,
+                    "foretak": [
+                        {"orgnr": "111111111", "rolletype": "Styrets leder",
+                         "konkursdato": "2022-05-01", "tiltradt": "2018-01-01",
+                         "tenure_days": 1000},
+                    ],
+                    "note": "Navnematch uten fødselsnummer — flagg for gjennomgang.",
+                },
+            }
+
+    out = await handle(_StubClient(), GetPersonInput(person_id="person-2025-" + "a" * 24))
+    assert out.navn == "KARL PETTER ULRIKSEN"
+    assert out.birth_year == 1973
+    assert out.konkurs_eksponering.get("antall_konkursforetak") == 3
+    assert len(out.shareholdings) == 1
+
+
+async def test_check_konkurs_eksponering_name_lookup() -> None:
+    """Navn-basert konkurs-eksponering — for HISTORISKE konkursgjengangere
+    uten person-nøkkel. Slår opp roller_history direkte på navn og bevarer
+    flagg-for-gjennomgang-rammen i ``note``."""
+    from firmaradar_mcp.tools.check_konkurs_eksponering import (
+        CheckKonkursEksponeringInput,
+        handle,
+    )
+
+    class _StubClient:
+        async def get(self, path, params=None):
+            assert path == "/api/v1/person/konkurs-eksponering"
+            assert params == {"navn": "Karl Petter Ulriksen"}
+            return {
+                "navn": "Karl Petter Ulriksen",
+                "konkurs_eksponering": {
+                    "antall_konkursforetak": 3,
+                    "foretak": [
+                        {"orgnr": "111111111", "rolletype": "Styrets leder",
+                         "konkursdato": "2022-05-01", "tiltradt": "2018-01-01",
+                         "tenure_days": 1000},
+                    ],
+                    "note": "Navnematch uten fødselsnummer — flagg for gjennomgang.",
+                },
+            }
+
+    out = await handle(
+        _StubClient(),
+        CheckKonkursEksponeringInput(navn="Karl Petter Ulriksen"),
+    )
+    assert out.antall_konkursforetak == 3
+    assert len(out.foretak) == 1
+    assert out.foretak[0].orgnr == "111111111"
+    assert "flagg" in (out.note or "").lower()

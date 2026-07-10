@@ -115,8 +115,25 @@ async def handle(
         try:
             sh_payload = await client.get(f"/api/v1/person/shareholdings/{pid}")
             if isinstance(sh_payload, dict):
-                navn = sh_payload.get("name") or sh_payload.get("navn") or navn
+                # Aksjeeier-recorden bruker "owner_name" (rolle-recorden bruker
+                # "name"). Uten owner_name-fallbacken ble navn="" → konkurs-
+                # eksponering-matchen mot roller_history feilet stille.
+                navn = (
+                    sh_payload.get("owner_name")
+                    or sh_payload.get("name")
+                    or sh_payload.get("navn")
+                    or navn
+                )
                 shareholdings = list(sh_payload.get("shareholdings") or [])
+                ke = sh_payload.get("konkurs_eksponering")
+                if isinstance(ke, dict) and ke.get("antall_konkursforetak"):
+                    konkurs_eksponering = ke
+                by_raw = sh_payload.get("birth_year")
+                if by_raw is not None and birth_year is None:
+                    try:
+                        birth_year = int(by_raw)
+                    except (TypeError, ValueError):
+                        pass
         except FirmaradarClientError:
             pass
 

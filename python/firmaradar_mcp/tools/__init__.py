@@ -50,6 +50,7 @@ from . import (  # noqa: E402
     check_aml_pep,
     check_fiv_bulk,
     check_foretak_i_vanskeligheter,
+    check_konkurs_eksponering,
     compare_companies,
     confirm_risk_score_disclaimer,
     convert_nok,
@@ -100,6 +101,9 @@ ALL_TOOLS: list[ToolHandler] = [
     # Risikosignaler (3)
     get_company_signals.HANDLER,
     check_aml_pep.HANDLER,
+    # Navn-basert konkurs-eksponering — når HISTORISKE konkursgjengangere
+    # (uten person-nøkkel) ikke kan nås via search_persons/get_person (2026-07-10).
+    check_konkurs_eksponering.HANDLER,
     get_recent_changes.HANDLER,
     # Bransje/relasjon (3)
     list_companies_in_nace.HANDLER,
@@ -160,6 +164,7 @@ TOOL_TITLES: dict[str, str] = {
     "firmaradar_get_person_companies": "Get Person's Companies",
     "firmaradar_get_company_signals": "Get Company Risk Signals",
     "firmaradar_check_aml_pep": "AML / PEP Screening",
+    "firmaradar_check_konkurs_eksponering": "Bankruptcy Exposure Screening (by Name)",
     "firmaradar_get_recent_changes": "Get Recent Changes",
     "firmaradar_list_companies_in_nace": "List Companies by Industry (NACE)",
     "firmaradar_find_related_companies": "Find Related Companies",
