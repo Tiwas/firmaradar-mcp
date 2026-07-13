@@ -80,7 +80,7 @@ Hent API-nøkkel: **[firmaradar.no/min-side/api-keys](https://firmaradar.no/min-
 
 ## Verktøykatalog
 
-33 verktøy. Python-pakka (`firmaradar-mcp` på PyPI) og remote-serveren (`mcp.firmaradar.no`) eksponerer alle 33; TypeScript-pakka (`@firmaradar/mcp-server` på npm) dekker foreløpig de 17 opprinnelige:
+35 verktøy. Python-pakka (`firmaradar-mcp` på PyPI) og remote-serveren (`mcp.firmaradar.no`) eksponerer alle 35; TypeScript-pakka (`@firmaradar/mcp-server` på npm) dekker foreløpig de 17 opprinnelige:
 
 ### Selskaps-oppslag
 - `firmaradar_search_companies` — søk på navn eller orgnr
@@ -90,7 +90,9 @@ Hent API-nøkkel: **[firmaradar.no/min-side/api-keys](https://firmaradar.no/min-
 - `firmaradar_get_company_financials` — årsregnskap, nøkkeltall og signaler
 - `firmaradar_get_company_announcements` — BRREG-kunngjøringer (vedtak, fusjoner, oppløsninger)
 - `firmaradar_get_company_signals` — risikoflagg, KYC-flagg, insolvens
+- `firmaradar_get_company_ip` — IP-portefølje fra Patentstyret: patenter, varemerker og design (totaler, aktive, enkeltrettigheter med status og lenke)
 - `firmaradar_find_related_companies` — finn relaterte selskaper via eierskap, roller eller adresse
+- `firmaradar_find_shared_connections` — skjulte koblinger på tvers av 2–10 selskaper (felles styre, adresse, eiere/morselskap, sirkulært eierskap) med risikonivå og graf
 
 ### Person-oppslag (krever full tilgang)
 - `firmaradar_search_persons` — navne-søk med toleranse for skrivefeil
@@ -100,13 +102,21 @@ Hent API-nøkkel: **[firmaradar.no/min-side/api-keys](https://firmaradar.no/min-
 
 ### KYC og AML
 - `firmaradar_check_aml_pep` — full AML/PEP-screening med sanksjonslister og revisjonsspor
-- `firmaradar_get_aml_score` — strukturert AML-risikoscore (0–100) med revisjonsspor (async rapport-flyt; faktor-detaljer i den lagrede rapporten)
+- `firmaradar_get_aml_score` — strukturert AML-risikoscore (0–100) med revisjonsspor
+- `firmaradar_start_aml_report` — start en asynkron, revisjonssikker AML-rapport (for tunge eierstrukturer eller mange parallelle screeninger); lagret 60 mnd per hvitvaskingsloven §35
+- `firmaradar_get_aml_report` — hent status og resultat (score, nivå, lenke) for en asynkron AML-rapport via `report_id`
+- `firmaradar_check_konkurs_eksponering` — screen en person på navn for konkurseksponering: lederverv i selskaper som senere gikk konkurs, tidsvektet (review-flagg, ikke dom)
 
-### Bransje og overvåkning
+### Bransje, overvåkning og abonnement
 - `firmaradar_list_companies_in_nace` — alle selskaper i en NACE-kode med geografisk filter
+- `firmaradar_list_nace_codes` — søk og bla i NACE-katalogen (SSB/BRREG); slå opp riktig kode, eller konverter EU NACE Rev. 2 → norske underkoder
 - `firmaradar_get_recent_changes` — endringer siste N dager for et orgnr
 - `firmaradar_search_announcements` — fritekst-søk i BRREG-kunngjøringer
 - `firmaradar_compare_companies` — sammenlikne flere selskaper side om side
+- `firmaradar_add_company_monitoring` — legg et selskap til overvåkning; varsel ved kunngjøringer, statusendring (konkurs/oppløsning), eierskifte eller nye offentlige tilskudd
+- `firmaradar_subscribe_nace` — abonner på bransjeovervåkning (NACE) med webhook ved hendelser i bransjen; filtrer på hendelsestype, geografi og størrelse
+- `firmaradar_list_my_subscriptions` — list dine NACE-abonnement (id, kode, webhook, filtre, status)
+- `firmaradar_delete_subscription` — slett ett NACE-abonnement på id (idempotent)
 
 ### Risiko, FIV og konsern
 - `firmaradar_get_risk_score` — transparent selskaps-risikoscore (0–100) med komponent-breakdown
@@ -115,6 +125,9 @@ Hent API-nøkkel: **[firmaradar.no/min-side/api-keys](https://firmaradar.no/min-
 - `firmaradar_check_fiv_bulk` — FIV-status for en portefølje orgnr i ett kall
 - `firmaradar_get_konsernstotte` — offentlig støtte gjennom konsernet (tre-struktur)
 - `firmaradar_confirm_risk_score_disclaimer` — bekreft pre-screening-disclaimer før risk-score-verktøyene
+
+### Valuta
+- `firmaradar_convert_nok` — konverter NOK-beløp til EUR/USD/GBP/SEK/DKK med dagskurser fra Norges Bank (NOK-originalen bevares alltid)
 
 Full API-referanse og eksempel-prompter: **[firmaradar.no/dokumentasjon](https://firmaradar.no/dokumentasjon)**
 
@@ -168,7 +181,7 @@ tools/mcp_server/
 │   │   ├── server.py         — MCP stdio og ekstern (streamable-HTTP)
 │   │   ├── remote_server.py  — OAuth 2.0 og DCR for Claude Mobile/Web
 │   │   ├── client.py         — REST-API-wrapper
-│   │   └── tools/            — 33 verktøy-moduler
+│   │   └── tools/            — 35 verktøy-moduler
 │   └── tests/
 └── typescript/               — npm-pakken «@firmaradar/mcp-server»
     └── src/
