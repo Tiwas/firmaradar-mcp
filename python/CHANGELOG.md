@@ -11,7 +11,7 @@ workflow-nodene på samme funksjonalitets-baseline.
 
 ---
 
-## [Unreleased]
+## [0.5.10] — 2026-07-16
 
 ### Changed
 
@@ -32,6 +32,19 @@ workflow-nodene på samme funksjonalitets-baseline.
   all announcement categories by default; `ip_alerts` (default `true`) also
   enables IP-change alerts when the account has the IP-monitoring add-on.
   Backed by `POST /monitoring/targets/add` (now accepts a JSON body).
+
+### Fixed
+
+- **Currency-aware financials.** `firmaradar_get_company_financials` and
+  `firmaradar_compare_companies` previously hardcoded "NOK" in summaries even
+  when a fiscal year was filed in another reporting currency (e.g. Equinor
+  2024 = USD). Amounts now carry the actual reporting currency: `valuta` is
+  exposed per year and at series level (`"MIXED"` for mixed-currency series),
+  `compare_companies` gains a `currencies` field aligned with `years`, and
+  year-over-year percentages are omitted across a currency change instead of
+  comparing raw amounts in different currencies.
+- **Server version string.** The stdio server advertised a stale version
+  (0.5.4) in its MCP initialize response; it now matches the package version.
 
 ---
 

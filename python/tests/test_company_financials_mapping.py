@@ -56,3 +56,77 @@ def test_empty_items_no_summary():
                              GetCompanyFinancialsInput(orgnr="111111111")))
     assert out.years == []
     assert out.summary is None
+
+
+# ── Valuta-awareness (2026-07-14) ──────────────────────────────────────
+# Backend leverer beløp i ORIGINALVALUTA per regnskapsår (Equinor 2024 =
+# USD). Summary hardkodet tidligere «NOK»; nå brukes faktisk valuta,
+# `valuta` finnes per år og på toppnivå, og YoY-prosent utelates over
+# valutaskifte.
+
+
+def _items_with_valuta(spec):
+    """spec: liste av (år, omsetning, valuta|None) — nyeste først."""
+    return [
+        {
+            "regnskapsar": ar,
+            "driftsinntekter": omsetning,
+            "driftsresultat": 100_000,
+            **({"valuta": valuta} if valuta is not None else {}),
+        }
+        for ar, omsetning, valuta in spec
+    ]
+
+
+def test_mixed_series_marks_valuta_and_skips_yoy_pct():
+    # Equinor-lignende: 2024 avlagt i USD, 2022–2023 i NOK.
+    payload = {"orgnr": "923609016", "regnskapstype": "SELSKAP",
+               "items": _items_with_valuta([
+                   (2024, 72_543_000_000, "USD"),
+                   (2023, 650_000_000_000, "NOK"),
+                   (2022, 600_000_000_000, "NOK"),
+               ])}
+    out = asyncio.run(handle(_Stub(payload), GetCompanyFinancialsInput(orgnr="923609016")))
+    # Toppnivå-felt: blandet serie merkes eksplisitt.
+    assert out.valuta == "MIXED"
+    # Per-år-felt.
+    by_year = {y.aar: y.valuta for y in out.years}
+    assert by_year[2024] == "USD"
+    assert by_year[2023] == "NOK"
+    # Summary: USD for 2024, valutaskifte nevnt, ingen misvisende YoY-%.
+    assert out.summary is not None
+    assert "72,543,000,000 USD" in out.summary
+    assert "blandet regnskapsvaluta" in out.summary
+    assert "skiftet fra NOK" in out.summary
+    assert "% vs" not in out.summary
+    # 2024-beløpet skal aldri merkes NOK.
+    assert "72,543,000,000 NOK" not in out.summary
+
+
+def test_uniform_nok_series_unchanged_contract():
+    payload = {"orgnr": "823107242", "regnskapstype": "SELSKAP",
+               "items": _items_with_valuta([
+                   (2024, 1_050_000, "NOK"),
+                   (2023, 1_000_000, None),  # None = NOK (radkonvensjon)
+               ])}
+    out = asyncio.run(handle(_Stub(payload), GetCompanyFinancialsInput(orgnr="823107242")))
+    assert out.valuta == "NOK"
+    assert out.summary is not None
+    assert "1,050,000 NOK" in out.summary
+    assert "+5.0% vs 2023" in out.summary
+    assert "blandet" not in out.summary
+
+
+def test_uniform_foreign_series_uses_actual_currency_with_yoy():
+    # Samme valuta i begge år → YoY-prosent er gyldig (valutanøytral).
+    payload = {"orgnr": "111111111", "regnskapstype": "SELSKAP",
+               "items": _items_with_valuta([
+                   (2024, 1_200_000, "USD"),
+                   (2023, 1_000_000, "USD"),
+               ])}
+    out = asyncio.run(handle(_Stub(payload), GetCompanyFinancialsInput(orgnr="111111111")))
+    assert out.valuta == "USD"
+    assert out.summary is not None
+    assert "1,200,000 USD" in out.summary
+    assert "+20.0% vs 2023" in out.summary
+    assert " NOK" not in out.summary

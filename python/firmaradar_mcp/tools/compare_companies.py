@@ -54,6 +54,16 @@ class CompareCompaniesOutput(BaseModel):
     comparison: dict[str, dict[str, list[Any]]] = Field(
         description="{<metric>: {<orgnr>: [<value_per_year>, ...]}}",
     )
+    currencies: dict[str, list[str | None]] | None = Field(
+        default=None,
+        description=(
+            "{<orgnr>: [<ISO 4217 currency per year, aligned with `years`>]}. "
+            "None for years without data. Amounts in `comparison` are in the "
+            "company's reporting currency for that year (NOK for most "
+            "Norwegian companies) — do not compare amounts across different "
+            "currencies without converting."
+        ),
+    )
     computed_at: str
     summary: str | None = None
 
@@ -123,21 +133,55 @@ async def handle(
                 year_data.get(y, {}).get(backend_field) for y in years_sorted
             ]
 
+    def _valuta_of(y_item: dict) -> str:
+        # Backend leverer beløp i ORIGINALVALUTA per regnskapsår
+        # (valuta-fiks 2026-07-14); None/tom betyr NOK (radkonvensjon).
+        return str(y_item.get("valuta") or "NOK").strip().upper() or "NOK"
+
+    # Additivt felt: rapporteringsvaluta per orgnr per år (alignet med
+    # `years`) — None for år uten data.
+    currencies: dict[str, list[str | None]] = {}
+    for orgnr in params.orgnrs:
+        year_data = per_orgnr_data.get(orgnr, {})
+        currencies[orgnr] = [
+            _valuta_of(year_data[y]) if y in year_data else None
+            for y in years_sorted
+        ]
+
     summary = None
     if years_sorted and per_orgnr_data:
         latest_year = years_sorted[-1]
         omsetninger = [
-            (o, per_orgnr_data.get(o, {}).get(latest_year, {}).get("driftsinntekter") or 0)
+            (
+                o,
+                per_orgnr_data.get(o, {}).get(latest_year, {}).get("driftsinntekter") or 0,
+                _valuta_of(per_orgnr_data.get(o, {}).get(latest_year, {})),
+            )
             for o in params.orgnrs
         ]
         omsetninger.sort(key=lambda t: t[1], reverse=True)
         if omsetninger and omsetninger[0][1]:
-            summary = f"Highest revenue (driftsinntekter / operating income) {latest_year}: {omsetninger[0][0]} ({int(omsetninger[0][1]):,} NOK)"
+            winner_orgnr, winner_amount, winner_ccy = omsetninger[0]
+            summary = (
+                f"Highest revenue (driftsinntekter / operating income) {latest_year}: "
+                f"{winner_orgnr} ({int(winner_amount):,} {winner_ccy})"
+            )
+            latest_ccys = {
+                ccy for o, amount, ccy in omsetninger
+                if per_orgnr_data.get(o, {}).get(latest_year) is not None
+            }
+            if len(latest_ccys) > 1:
+                summary += (
+                    " — NB: the companies report in different currencies ("
+                    + ", ".join(sorted(latest_ccys))
+                    + "); amounts are not directly comparable without conversion."
+                )
 
     return CompareCompaniesOutput(
         orgnrs=params.orgnrs,
         years=years_sorted,
         comparison=comparison,
+        currencies=currencies or None,
         computed_at=datetime.now(timezone.utc).isoformat(),
         summary=summary,
     )
@@ -149,7 +193,9 @@ HANDLER = ToolHandler(
         "Compare key financial metrics of up to 5 Norwegian companies "
         "side-by-side across the last N years (default 5). Use for "
         "competitor analysis, benchmark research or 'which of these three "
-        "companies is the strongest?'"
+        "companies is the strongest?' Amounts are in each company's "
+        "reporting currency (see the `currencies` field; NOK for most "
+        "Norwegian companies) — check it before comparing absolute amounts."
     ),
     input_schema=CompareCompaniesInput,
     output_schema=CompareCompaniesOutput,
