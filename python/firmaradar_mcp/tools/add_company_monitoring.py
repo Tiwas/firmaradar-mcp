@@ -18,6 +18,12 @@ Compliance / auth:
   token (Bearer → portal_api_key → user_id is 1:1).
 * Requires a user whose plan has Firmaovervakning enabled (403 otherwise).
 * 409 if the company is already in the list — idempotent, no duplicate row.
+* 403 ``error_code`` ``monitoring_cap_reached`` if the caller's COMPANY
+  (aggregated across all its users, not just this one) has hit its
+  per-company monitoring cap. Already-monitored companies are exempt — the
+  cap only blocks NEW additions. This tool is a thin pass-through to
+  ``POST /monitoring/targets/add``, which owns the cap check (see
+  ``monitoring_limits.py``); no separate enforcement lives here.
 """
 
 from __future__ import annotations
@@ -83,9 +89,11 @@ HANDLER = ToolHandler(
         "announcement categories by default; keep ip_alerts=true (default) to "
         "also turn on IP-change alerts when the account has the IP-monitoring "
         "add-on, or set ip_alerts=false to skip them. 409 if already monitored "
-        "(idempotent — no duplicate). Requires a user whose plan has "
-        "Firmaovervakning enabled. Call only when the user has asked to monitor "
-        "a specific company."
+        "(idempotent — no duplicate). 403 (monitoring_cap_reached) if the "
+        "account's company has hit its per-company monitoring cap — tell the "
+        "user to contact Firmaradar to expand it. Requires a user whose plan "
+        "has Firmaovervakning enabled. Call only when the user has asked to "
+        "monitor a specific company."
     ),
     input_schema=AddCompanyMonitoringInput,
     output_schema=AddCompanyMonitoringOutput,
