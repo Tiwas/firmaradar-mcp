@@ -8,10 +8,10 @@ When to use: agent has a fuzzy description ("active retail companies in
 Bergen with > 10 employees") and needs candidate orgnr to investigate
 further.
 
-Backend status (2026-05-25): **PARTIAL** — only ``/api/autocomplete``
-exists today. A new ``GET /api/v1/companies/search`` endpoint with the
-full filter-set must be added before this tool can ship. See
-``plans/MCP_V01_INVENTORY.md`` tool #1.
+Backend: ``GET /api/v1/companies/search`` (q/nace/kommune/status,
+server-side status-håndheving siden 2026-07-24) + dedikert
+``/api/v1/nace/{code}/companies`` for NACE-only-søk. Ansatte-spennet
+filtreres klient-side; omsetnings-spennet er fortsatt v0.2-udekket.
 """
 
 from __future__ import annotations
@@ -98,16 +98,22 @@ class SearchCompaniesOutput(BaseModel):
 async def handle(
     client: FirmaradarClient, params: SearchCompaniesInput
 ) -> SearchCompaniesOutput:
-    """v0.1: hybrid approach.
+    """Hybrid ruting mot to backend-endepunkter.
 
-    * Hvis kun `nace` (eller `nace + kommune + status + ansatte`) er gitt
-      uten `q`, route mot list_companies_in_nace-endepunktet som har
-      effektiv indeks-basert query.
-    * Hvis `q` er gitt (navn-prefix), bruk eksisterende
-      /api/autocomplete + klient-side filtrering for status/ansatte.
-    * Full filter-kombinasjon (omsetning-spenn, stiftelsesdato) krever
-      ny backend-endepunkt med disse kolonnene indeksert. Flagget for
-      v0.2 — disse filtrene logges som ignored hvis brukt.
+    * `nace` uten `q`: ``/api/v1/nace/{code}/companies`` — dedikert,
+      indeks-effektivt endepunkt (status/kommune/ansatte/stiftet
+      håndteres server-side der).
+    * `q`/`kommune`/`status` ellers: ``GET /api/v1/companies/search``
+      med q/nace/kommune/status/limit/cursor pass-through — status
+      håndheves SERVER-SIDE (bugfiks 2026-07-24: tidligere gikk denne
+      stien via /api/autocomplete (maks 10) + klient-side filtrering,
+      som ga 0/ufiltrerte svar for q+status). Backend-feil (f.eks. 400
+      for `status=avregistrert`, som hovedenheter ikke kan besvare)
+      BOBLER som FirmaradarClientError → strukturert feilsvar, aldri
+      stille tomt resultat.
+    * Ansatte-spennet filtreres klient-side på returnert side
+      (endepunktet mangler spenn-parametre); omsetnings-spennet er
+      fortsatt udekket (v0.2) og ignoreres på denne stien.
     """
     # NACE-only path: bruk det effektive endepunktet
     if params.nace and not params.q:
@@ -152,36 +158,36 @@ async def handle(
             total_count=payload.get("total_count") if isinstance(payload, dict) else None,
         )
 
-    # Navn-søk: bruk autocomplete + filtrer klient-side
-    if not params.q:
+    # Uten noe API-et kan filtrere på: tomt svar uten backend-kall
+    # (uendret kontrakt for helt tom input).
+    if not (params.q or params.kommune or params.status):
         return SearchCompaniesOutput(
             items=[],
             next_cursor=None,
             total_count=0,
         )
 
-    try:
-        # /api/autocomplete returnerer maks 10 — vi henter det maks vi
-        # kan og filtrerer ned. Ikke ideelt for store datasett, men
-        # dekker v0.1-bruk for spesifikke navn.
-        raw = await client.get("/api/autocomplete", params={"q": params.q})
-    except FirmaradarClientError:
-        raw = []
+    # q-/kommune-/status-søk: det ekte endepunktet med server-side
+    # filtrering. Feil bobler (server.py mapper til strukturert
+    # feilsvar) — et backend-problem skal ikke se ut som «0 selskaper».
+    qp = {"limit": params.limit}
+    if params.q:
+        qp["q"] = params.q
+    if params.nace:
+        qp["nace"] = params.nace
+    if params.kommune:
+        qp["kommune"] = params.kommune
+    if params.status:
+        qp["status"] = params.status
+    if params.cursor:
+        qp["cursor"] = params.cursor
+    payload = await client.get("/api/v1/companies/search", params=qp)
+    items_raw = payload.get("items", []) if isinstance(payload, dict) else []
 
-    if not isinstance(raw, list):
-        raw = []
-
-    # Klient-side filter
+    # Ansatte-spennet finnes ikke som parameter på endepunktet —
+    # filtrer klient-side på den returnerte siden.
     filtered = []
-    for item in raw:
-        if params.status:
-            status = "aktiv"
-            if item.get("konkurs"):
-                status = "konkurs"
-            elif item.get("under_avvikling"):
-                status = "under_avvikling"
-            if status != params.status:
-                continue
+    for item in items_raw:
         if params.min_ansatte is not None and (item.get("antall_ansatte") or 0) < params.min_ansatte:
             continue
         if params.max_ansatte is not None and (item.get("antall_ansatte") or 0) > params.max_ansatte:
@@ -190,22 +196,18 @@ async def handle(
             CompanyHit(
                 orgnr=str(item.get("orgnr", "")),
                 navn=str(item.get("navn", "")),
-                kommune=item.get("forr_poststed"),
-                status=(
-                    "konkurs" if item.get("konkurs") else
-                    "under_avvikling" if item.get("under_avvikling") else
-                    "aktiv"
-                ),
+                organisasjonsform=item.get("organisasjonsform"),
+                naeringskode=item.get("naeringskode"),
+                kommune=item.get("kommune"),
+                status=item.get("status"),
                 antall_ansatte=item.get("antall_ansatte"),
             )
         )
-        if len(filtered) >= params.limit:
-            break
 
     return SearchCompaniesOutput(
         items=filtered,
-        next_cursor=None,  # autocomplete har ikke paginering
-        total_count=len(filtered),
+        next_cursor=payload.get("next_cursor") if isinstance(payload, dict) else None,
+        total_count=payload.get("total_count") if isinstance(payload, dict) else None,
     )
 
 
