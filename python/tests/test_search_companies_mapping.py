@@ -8,7 +8,11 @@ q/nace/kommune/status/limit/cursor pass-through; ansatte-spennet
 filtreres fortsatt klient-side (endepunktet mangler kolonnespennene);
 backend-feil BOBLER som ``FirmaradarClientError`` (server.py mapper til
 strukturert feilsvar) i stedet for å maskeres som tomt resultat.
-NACE-only-stien er uendret (indeks-effektivt dedikert endepunkt).
+NACE-only-stien er uendret (indeks-effektivt dedikert endepunkt) —
+MEN kun når ``fylke`` ikke også er satt (se Group 2 under: fylke-fiks
+2026-07-24 — ``/api/v1/nace/{code}/companies`` støtter ikke fylke, så
+``fylke`` tvinger ruting til ``/api/v1/companies/search`` selv ved
+nace-only, i stedet for å bli stille ignorert slik den ble før).
 """
 from __future__ import annotations
 
@@ -146,3 +150,56 @@ def test_no_filters_returns_empty_without_calls():
     out = asyncio.run(handle(stub, SearchCompaniesInput()))
     assert out.items == []
     assert stub.calls == []
+
+
+# ════════════════════════════════════════════════════════════════════════════
+# Group 2 — fylke-fiks (2026-07-24): skjemaet lovet fylke siden v0.2, men
+# verken ruten eller MCP-verktøyet sendte den videre (stille ignorert).
+# ════════════════════════════════════════════════════════════════════════════
+
+
+def test_q_path_passes_fylke():
+    """fylke passthrough på q-stien — samme mønster som nace/kommune."""
+    stub = _Stub({"items": [_api_item()], "total_count": 1})
+    out = asyncio.run(handle(stub, SearchCompaniesInput(q="ek", fylke="03")))
+    path, params = stub.calls[0]
+    assert path == "/api/v1/companies/search"
+    assert params["fylke"] == "03"
+    assert len(out.items) == 1
+
+
+def test_nace_with_fylke_routes_to_companies_search():
+    """VIKTIG ruting-endring 2026-07-24: fylke tvinger companies/search
+    selv med nace satt (og uten q) — NACE-endepunktet mangler
+    fylke-støtte, og stille ignorering var nettopp buggen som fjernes."""
+    stub = _Stub({"items": [_api_item()], "total_count": 1})
+    out = asyncio.run(handle(stub, SearchCompaniesInput(nace="47", fylke="03")))
+    path, params = stub.calls[0]
+    assert path == "/api/v1/companies/search"
+    assert params["nace"] == "47"
+    assert params["fylke"] == "03"
+    assert "q" not in params
+    assert len(out.items) == 1
+
+
+def test_nace_without_fylke_still_uses_nace_endpoint():
+    """Regresjon: nace uten fylke skal fortsatt bruke det dedikerte,
+    indeks-effektive NACE-endepunktet — uendret av fylke-ruting-fiksen."""
+    stub = _Stub({"items": [], "total_count": 0})
+    asyncio.run(handle(stub, SearchCompaniesInput(nace="47")))
+    path, params = stub.calls[0]
+    assert path == "/api/v1/nace/47/companies"
+    assert "fylke" not in params
+
+
+def test_fylke_only_routes_to_endpoint_for_explicit_400():
+    """fylke alene (uten q/nace/kommune) skal treffe API-et (som svarer
+    400 med forklaring — smalnings-filter uten indeks-støtte, samme
+    mønster som status), ikke maskeres som tomt resultat."""
+    stub = _Stub(error=FirmaradarClientError(
+        "fylke kan kun brukes sammen med minst ett av q/nace/kommune",
+        status_code=400,
+    ))
+    with pytest.raises(FirmaradarClientError):
+        asyncio.run(handle(stub, SearchCompaniesInput(fylke="03")))
+    assert stub.calls[0][0] == "/api/v1/companies/search"

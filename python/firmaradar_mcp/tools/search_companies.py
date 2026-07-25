@@ -8,10 +8,15 @@ When to use: agent has a fuzzy description ("active retail companies in
 Bergen with > 10 employees") and needs candidate orgnr to investigate
 further.
 
-Backend: ``GET /api/v1/companies/search`` (q/nace/kommune/status,
-server-side status-håndheving siden 2026-07-24) + dedikert
-``/api/v1/nace/{code}/companies`` for NACE-only-søk. Ansatte-spennet
-filtreres klient-side; omsetnings-spennet er fortsatt v0.2-udekket.
+Backend: ``GET /api/v1/companies/search`` (q/nace/kommune/status/fylke,
+server-side håndheving siden 2026-07-24) + dedikert
+``/api/v1/nace/{code}/companies`` for NACE-only-søk (det endepunktet
+støtter IKKE fylke — ``fylke`` ruter derfor alltid til
+``/api/v1/companies/search``, selv ved nace-only). Ansatte-spennet
+filtreres klient-side; omsetnings-spennet er fortsatt udekket (se
+``plans/TODO.md`` — undersøkt 2026-07-24, ikke implementert: krever ny
+indeks/denormalisert kolonne og har motstridende SELSKAP/KONSERN-
+definisjoner av "omsetning").
 """
 
 from __future__ import annotations
@@ -100,23 +105,31 @@ async def handle(
 ) -> SearchCompaniesOutput:
     """Hybrid ruting mot to backend-endepunkter.
 
-    * `nace` uten `q`: ``/api/v1/nace/{code}/companies`` — dedikert,
-      indeks-effektivt endepunkt (status/kommune/ansatte/stiftet
-      håndteres server-side der).
-    * `q`/`kommune`/`status` ellers: ``GET /api/v1/companies/search``
-      med q/nace/kommune/status/limit/cursor pass-through — status
-      håndheves SERVER-SIDE (bugfiks 2026-07-24: tidligere gikk denne
-      stien via /api/autocomplete (maks 10) + klient-side filtrering,
-      som ga 0/ufiltrerte svar for q+status). Backend-feil (f.eks. 400
-      for `status=avregistrert`, som hovedenheter ikke kan besvare)
-      BOBLER som FirmaradarClientError → strukturert feilsvar, aldri
-      stille tomt resultat.
+    * `nace` uten `q` og uten `fylke`: ``/api/v1/nace/{code}/companies``
+      — dedikert, indeks-effektivt endepunkt (status/kommune/ansatte/
+      stiftet håndteres server-side der; fylke støttes IKKE der).
+    * `nace` + `fylke` (uansett `q`): ruter til
+      ``/api/v1/companies/search`` i stedet for NACE-endepunktet —
+      NACE-endepunktet mangler fylke-støtte, og stille ignorering var
+      nettopp buggen som fjernes her (2026-07-24).
+    * `q`/`kommune`/`status`/`fylke` ellers: ``GET /api/v1/companies/search``
+      med q/nace/kommune/status/fylke/limit/cursor pass-through — status
+      OG fylke håndheves SERVER-SIDE (bugfiks 2026-07-24: tidligere gikk
+      q-stien via /api/autocomplete (maks 10) + klient-side filtrering,
+      som ga 0/ufiltrerte svar for q+status; fylke ble stille ignorert
+      helt frem til nå). Backend-feil (f.eks. 400 for
+      `status=avregistrert`, eller `fylke` alene uten q/nace/kommune —
+      begge er smalnings-filtre uten indeks-støtte) BOBLER som
+      FirmaradarClientError → strukturert feilsvar, aldri stille tomt
+      resultat.
     * Ansatte-spennet filtreres klient-side på returnert side
       (endepunktet mangler spenn-parametre); omsetnings-spennet er
-      fortsatt udekket (v0.2) og ignoreres på denne stien.
+      fortsatt udekket og ignoreres på denne stien (se plans/TODO.md).
     """
-    # NACE-only path: bruk det effektive endepunktet
-    if params.nace and not params.q:
+    # NACE-only path: bruk det effektive endepunktet — MEN kun når fylke
+    # ikke er satt (NACE-endepunktet støtter ikke fylke; se modul-
+    # docstringen for VIKTIG ruting-endring 2026-07-24).
+    if params.nace and not params.q and not params.fylke:
         qp: dict[str, Any] = {"limit": params.limit}
         if params.status:
             qp["status"] = params.status
@@ -159,15 +172,18 @@ async def handle(
         )
 
     # Uten noe API-et kan filtrere på: tomt svar uten backend-kall
-    # (uendret kontrakt for helt tom input).
-    if not (params.q or params.kommune or params.status):
+    # (uendret kontrakt for helt tom input). `fylke` telles med her selv
+    # om den ikke er en "base"-filter server-side — et rent
+    # fylke-alene-kall skal fortsatt TREFFE API-et (som svarer 400 med
+    # forklaring), ikke maskeres som tomt resultat client-side.
+    if not (params.q or params.kommune or params.status or params.fylke):
         return SearchCompaniesOutput(
             items=[],
             next_cursor=None,
             total_count=0,
         )
 
-    # q-/kommune-/status-søk: det ekte endepunktet med server-side
+    # q-/kommune-/status-/fylke-søk: det ekte endepunktet med server-side
     # filtrering. Feil bobler (server.py mapper til strukturert
     # feilsvar) — et backend-problem skal ikke se ut som «0 selskaper».
     qp = {"limit": params.limit}
@@ -177,6 +193,8 @@ async def handle(
         qp["nace"] = params.nace
     if params.kommune:
         qp["kommune"] = params.kommune
+    if params.fylke:
+        qp["fylke"] = params.fylke
     if params.status:
         qp["status"] = params.status
     if params.cursor:
