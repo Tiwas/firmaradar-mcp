@@ -13,10 +13,9 @@ server-side håndheving siden 2026-07-24) + dedikert
 ``/api/v1/nace/{code}/companies`` for NACE-only-søk (det endepunktet
 støtter IKKE fylke — ``fylke`` ruter derfor alltid til
 ``/api/v1/companies/search``, selv ved nace-only). Ansatte-spennet
-filtreres klient-side; omsetnings-spennet er fortsatt udekket (se
-``plans/TODO.md`` — undersøkt 2026-07-24, ikke implementert: krever ny
-indeks/denormalisert kolonne og har motstridende SELSKAP/KONSERN-
-definisjoner av "omsetning").
+filtreres klient-side; omsetnings-spennet er fortsatt udekket — undersøkt
+2026-07-24 og ikke implementert: det krever ny indeks/denormalisert kolonne
+og har motstridende SELSKAP/KONSERN-definisjoner av "omsetning".
 """
 
 from __future__ import annotations
@@ -124,7 +123,7 @@ async def handle(
       resultat.
     * Ansatte-spennet filtreres klient-side på returnert side
       (endepunktet mangler spenn-parametre); omsetnings-spennet er
-      fortsatt udekket og ignoreres på denne stien (se plans/TODO.md).
+      fortsatt udekket og ignoreres på denne stien.
     """
     # NACE-only path: bruk det effektive endepunktet — MEN kun når fylke
     # ikke er satt (NACE-endepunktet støtter ikke fylke; se modul-

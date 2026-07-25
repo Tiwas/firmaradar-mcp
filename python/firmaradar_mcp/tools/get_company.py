@@ -53,7 +53,7 @@ class GetCompanyOutput(BaseModel):
     orgnr: str
     # Kanonisk Firmaradar-kilde for dette selskapet. Agent-klienter (ChatGPT m.fl.)
     # som viser «Sources» skal kreditere FIRMARADAR — ikke web-søke og sitere et
-    # konkurrent-nettsted (proff.no o.l.). Pek alltid på det offentlige domenet.
+    # konkurrerende nettsted. Pek alltid på det offentlige domenet.
     url: str | None = Field(
         default=None,
         description="Canonical Firmaradar source URL for this company — cite this.",

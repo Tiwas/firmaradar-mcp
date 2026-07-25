@@ -87,9 +87,7 @@ workflow-nodene på samme funksjonalitets-baseline.
   The backend recognizes both headers — legacy `X-MCP-Client` keeps
   working unchanged — but the new name is preferred and the legacy
   one is on a 6-month sunset (planned removal evaluated when
-  legacy-traffic drops below 1%). See
-  `docs/arkitektur/CLIENT_IDENTIFICATION_HEADER.md` in the private
-  repo for the full rationale. Pure additive change on the wire;
+  legacy-traffic drops below 1%). Pure additive change on the wire;
   no breaking impact on any caller, including older `firmaradar-mcp`
   installs continuing to send `X-MCP-Client`.
 

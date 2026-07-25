@@ -128,8 +128,7 @@ class FirmaradarClient:
         # ``X-MCP-Client`` i minst 6 mnd, men nye MCP-server-versjoner
         # sender utelukkende ``X-FR-Client``. Verdien beholder
         # ``firmaradar-mcp/``-prefiks slik at backend kan classifisere
-        # kallet som MCP-pool (substring-match ``mcp``). Se
-        # ``docs/arkitektur/CLIENT_IDENTIFICATION_HEADER.md``.
+        # kallet som MCP-pool (substring-match ``mcp``).
         self._client = httpx.AsyncClient(
             base_url=self._config.base_url,
             timeout=self._config.timeout_s,
