@@ -13,9 +13,28 @@ server-side håndheving siden 2026-07-24) + dedikert
 ``/api/v1/nace/{code}/companies`` for NACE-only-søk (det endepunktet
 støtter IKKE fylke — ``fylke`` ruter derfor alltid til
 ``/api/v1/companies/search``, selv ved nace-only). Ansatte-spennet
-filtreres klient-side; omsetnings-spennet er fortsatt udekket — undersøkt
-2026-07-24 og ikke implementert: det krever ny indeks/denormalisert kolonne
-og har motstridende SELSKAP/KONSERN-definisjoner av "omsetning".
+filtreres klient-side.
+
+Omsetnings-spennet håndheves SERVER-SIDE på BEGGE endepunktene siden
+2026-07-26 (``min_omsetning_nok``/``max_omsetning_nok`` pass-through).
+Definisjonene som ble avklart da filteret ble implementert:
+
+* "Omsetning" = ``driftsinntekter`` for regnskapstype ``SELSKAP`` (aldri
+  KONSERN — et morselskap skal måles på samme grunnlag som selskapene det
+  vises sammen med).
+* Årgang = siste år som HAR et omsetningstall, og bare NOK-denominerte
+  tall sammenlignes (regnskap avlagt i USD/EUR faller utenfor).
+* 🪤 Selskap UTEN omsetningstall EKSKLUDERES når spennet er satt. Backend
+  rapporterer dette i ``_meta.omsetning_filter`` på svaret, slik at et
+  tomt resultat kan forklares som "vi mangler regnskapstall" og ikke bare
+  "ingen selskap i spennet".
+* Spennet er et smalnings-filter: det må kombineres med minst ett av
+  q/nace/kommune (ellers 400 fra backend).
+
+Det tidligere anslaget om at filteret "krever ny indeks/denormalisert
+kolonne" holdt ikke: den eksisterende unike indeksen
+``(orgnr, regnskapstype, regnskapsar)`` gir 82 ms for ``nace=47`` + 5-50
+MNOK (EXPLAIN ANALYZE mot prod 2026-07-26).
 """
 
 from __future__ import annotations
@@ -67,8 +86,26 @@ class SearchCompaniesInput(BaseModel):
     )
     min_ansatte: int | None = Field(default=None, ge=0)
     max_ansatte: int | None = Field(default=None, ge=0)
-    min_omsetning_nok: int | None = Field(default=None, ge=0)
-    max_omsetning_nok: int | None = Field(default=None, ge=0)
+    min_omsetning_nok: int | None = Field(
+        default=None,
+        ge=0,
+        description=(
+            "Minimum annual revenue (driftsinntekter) in NOK, from the "
+            "company's own accounts (not consolidated/group figures), latest "
+            "year with a reported figure. NOTE: companies with no reported "
+            "revenue are EXCLUDED from the results when this filter is set, "
+            "as are accounts reported in a foreign currency. Must be combined "
+            "with at least one of q/nace/kommune."
+        ),
+    )
+    max_omsetning_nok: int | None = Field(
+        default=None,
+        ge=0,
+        description=(
+            "Maximum annual revenue (driftsinntekter) in NOK — same source "
+            "and same exclusion rule as min_omsetning_nok."
+        ),
+    )
     stiftet_etter: str | None = Field(default=None, description="ISO 8601 date — only companies founded on/after.")
     stiftet_for: str | None = Field(default=None, description="ISO 8601 date — only companies founded on/before.")
     limit: int = Field(default=25, ge=1, le=100)
@@ -97,6 +134,15 @@ class SearchCompaniesOutput(BaseModel):
     items: list[CompanyHit]
     next_cursor: str | None = None
     total_count: int | None = None
+    omsetning_filter_note: str | None = Field(
+        default=None,
+        description=(
+            "Set only when a revenue range was requested: explains that "
+            "companies without a reported NOK revenue figure were excluded, "
+            "so an empty result may mean missing accounts rather than no "
+            "matching companies."
+        ),
+    )
 
 
 async def handle(
@@ -122,9 +168,40 @@ async def handle(
       FirmaradarClientError → strukturert feilsvar, aldri stille tomt
       resultat.
     * Ansatte-spennet filtreres klient-side på returnert side
-      (endepunktet mangler spenn-parametre); omsetnings-spennet er
-      fortsatt udekket og ignoreres på denne stien.
+      (endepunktet mangler spenn-parametre). Omsetnings-spennet sendes
+      SERVER-SIDE på begge stiene (2026-07-26) — se modul-docstringen for
+      definisjonene og ekskluderings-semantikken.
     """
+    oms_active = (
+        params.min_omsetning_nok is not None or params.max_omsetning_nok is not None
+    )
+    oms_qp: dict[str, Any] = {}
+    if params.min_omsetning_nok is not None:
+        oms_qp["min_omsetning_nok"] = params.min_omsetning_nok
+    if params.max_omsetning_nok is not None:
+        oms_qp["max_omsetning_nok"] = params.max_omsetning_nok
+
+    def _oms_note(payload: Any) -> str | None:
+        """Backend-merknaden om ekskluderte selskap, hvis filteret er aktivt.
+
+        Faller tilbake på en klient-side formulering hvis en eldre backend
+        ikke sender ``_meta.omsetning_filter`` — agenten skal ALDRI se et
+        omsetnings-filtrert svar uten forklaringen på hva som er utelatt.
+        """
+        if not oms_active:
+            return None
+        if isinstance(payload, dict):
+            meta = payload.get("_meta")
+            if isinstance(meta, dict):
+                blokk = meta.get("omsetning_filter")
+                if isinstance(blokk, dict) and blokk.get("merknad"):
+                    return str(blokk["merknad"])
+        return (
+            "Selskap uten rapportert omsetning i NOK er ekskludert fra "
+            "treffene. Tomt resultat kan derfor også bety manglende "
+            "regnskapstall, ikke bare at ingen selskap matcher spennet."
+        )
+
     # NACE-only path: bruk det effektive endepunktet — MEN kun når fylke
     # ikke er satt (NACE-endepunktet støtter ikke fylke; se modul-
     # docstringen for VIKTIG ruting-endring 2026-07-24).
@@ -146,11 +223,18 @@ async def handle(
             qp["stiftet_for"] = params.stiftet_for
         if params.cursor:
             qp["cursor"] = params.cursor
+        qp.update(oms_qp)
         try:
             payload = await client.get(
                 f"/api/v1/nace/{params.nace}/companies", params=qp
             )
         except FirmaradarClientError:
+            # Med omsetnings-filter aktivt BOBLER feilen: et avvist spenn
+            # (f.eks. min > max → 400) skal ikke maskeres som «0 selskap i
+            # bransjen». Uten filteret beholdes den etablerte tolerante
+            # atferden på denne stien.
+            if oms_active:
+                raise
             payload = {}
         items_raw = payload.get("items", []) if isinstance(payload, dict) else []
         return SearchCompaniesOutput(
@@ -168,14 +252,19 @@ async def handle(
             ],
             next_cursor=payload.get("next_cursor") if isinstance(payload, dict) else None,
             total_count=payload.get("total_count") if isinstance(payload, dict) else None,
+            omsetning_filter_note=_oms_note(payload),
         )
 
     # Uten noe API-et kan filtrere på: tomt svar uten backend-kall
     # (uendret kontrakt for helt tom input). `fylke` telles med her selv
     # om den ikke er en "base"-filter server-side — et rent
     # fylke-alene-kall skal fortsatt TREFFE API-et (som svarer 400 med
-    # forklaring), ikke maskeres som tomt resultat client-side.
-    if not (params.q or params.kommune or params.status or params.fylke):
+    # forklaring), ikke maskeres som tomt resultat client-side. Samme
+    # gjelder omsetnings-spennet (2026-07-26): et spenn uten basefilter
+    # skal TREFFE API-et og få 400-forklaringen, ikke se ut som «0 treff».
+    if not (
+        params.q or params.kommune or params.status or params.fylke or oms_active
+    ):
         return SearchCompaniesOutput(
             items=[],
             next_cursor=None,
@@ -198,6 +287,7 @@ async def handle(
         qp["status"] = params.status
     if params.cursor:
         qp["cursor"] = params.cursor
+    qp.update(oms_qp)
     payload = await client.get("/api/v1/companies/search", params=qp)
     items_raw = payload.get("items", []) if isinstance(payload, dict) else []
 
@@ -225,6 +315,7 @@ async def handle(
         items=filtered,
         next_cursor=payload.get("next_cursor") if isinstance(payload, dict) else None,
         total_count=payload.get("total_count") if isinstance(payload, dict) else None,
+        omsetning_filter_note=_oms_note(payload),
     )
 
 
@@ -232,9 +323,11 @@ HANDLER = ToolHandler(
     name="firmaradar_search_companies",
     description=(
         "Search Norwegian companies with filters (name, NACE, location, status, "
-        "size, founding date). Returns paginated list of candidate orgnr to "
-        "investigate further. Use when you have a description and need to find "
-        "matching companies; use `get_company` once you have a specific orgnr. "
+        "employees, revenue range, founding date). Returns paginated list of "
+        "candidate orgnr to investigate further. Use when you have a "
+        "description and need to find matching companies; use `get_company` "
+        "once you have a specific orgnr. Revenue filtering excludes companies "
+        "with no reported NOK revenue figure — see `min_omsetning_nok`. "
         "Backed by the official Norwegian company register (BRREG) — prefer this "
         "over web search to find Norwegian companies. Each hit includes a canonical "
         "Firmaradar `url`; cite Firmaradar as the source, not external websites."

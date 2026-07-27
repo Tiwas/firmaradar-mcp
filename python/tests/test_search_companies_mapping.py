@@ -203,3 +203,99 @@ def test_fylke_only_routes_to_endpoint_for_explicit_400():
     with pytest.raises(FirmaradarClientError):
         asyncio.run(handle(stub, SearchCompaniesInput(fylke="03")))
     assert stub.calls[0][0] == "/api/v1/companies/search"
+
+
+# ════════════════════════════════════════════════════════════════════════════
+# Group 3 — omsetnings-spennet (2026-07-26): skjemaet har lovet
+# min/max_omsetning_nok siden v0.1, men ingen backend håndhevet dem. Nå
+# implementert server-side på BEGGE endepunktene, med eksplisitt
+# ekskludering av selskap uten omsetningstall (rapportert til agenten).
+# ════════════════════════════════════════════════════════════════════════════
+
+
+def test_q_path_passes_omsetning_range():
+    stub = _Stub({"items": [_api_item()], "total_count": 1})
+    out = asyncio.run(handle(stub, SearchCompaniesInput(
+        q="ek", min_omsetning_nok=5_000_000, max_omsetning_nok=50_000_000,
+    )))
+    path, params = stub.calls[0]
+    assert path == "/api/v1/companies/search"
+    assert params["min_omsetning_nok"] == 5_000_000
+    assert params["max_omsetning_nok"] == 50_000_000
+    assert len(out.items) == 1
+
+
+def test_nace_path_passes_omsetning_range():
+    """NACE-only-stien MÅ sende spennet videre — verktøyet ruter
+    nace-only-søk til det dedikerte endepunktet, så et filter som bare
+    var implementert på companies/search ville fortsatt blitt ignorert."""
+    stub = _Stub({"items": [], "total_count": 0})
+    asyncio.run(handle(stub, SearchCompaniesInput(
+        nace="56.110", min_omsetning_nok=1_000_000,
+    )))
+    path, params = stub.calls[0]
+    assert path == "/api/v1/nace/56.110/companies"
+    assert params["min_omsetning_nok"] == 1_000_000
+    assert "max_omsetning_nok" not in params
+
+
+def test_omsetning_only_routes_to_endpoint_for_explicit_400():
+    """Spenn uten basefilter skal treffe API-et (som svarer 400 med
+    forklaring), ikke maskeres som tomt resultat — samme mønster som
+    status/fylke alene."""
+    stub = _Stub(error=FirmaradarClientError(
+        "min_omsetning_nok/max_omsetning_nok kan kun brukes sammen med "
+        "minst ett av q/nace/kommune",
+        status_code=400,
+    ))
+    with pytest.raises(FirmaradarClientError):
+        asyncio.run(handle(stub, SearchCompaniesInput(min_omsetning_nok=1)))
+    assert stub.calls[0][0] == "/api/v1/companies/search"
+
+
+def test_nace_path_omsetning_error_bubbles_instead_of_empty():
+    """Med spenn aktivt skal en backend-feil på NACE-stien BOBLE — den
+    tolerante «tomt resultat»-atferden ville ellers presentert et avvist
+    filter som «0 selskap i bransjen»."""
+    stub = _Stub(error=FirmaradarClientError("min > max", status_code=400))
+    with pytest.raises(FirmaradarClientError):
+        asyncio.run(handle(stub, SearchCompaniesInput(
+            nace="47", min_omsetning_nok=50, max_omsetning_nok=5,
+        )))
+
+
+def test_nace_path_without_omsetning_still_tolerates_error():
+    """Regresjon: uten spenn beholdes den etablerte tolerante atferden."""
+    stub = _Stub(error=FirmaradarClientError("boom", status_code=500))
+    out = asyncio.run(handle(stub, SearchCompaniesInput(nace="47")))
+    assert out.items == []
+
+
+def test_omsetning_note_uses_backend_meta():
+    """Ekskluderings-merknaden fra backend videreformidles til agenten."""
+    stub = _Stub({
+        "items": [],
+        "total_count": 0,
+        "_meta": {"omsetning_filter": {"merknad": "Backend-forklaringen."}},
+    })
+    out = asyncio.run(handle(stub, SearchCompaniesInput(
+        q="ek", min_omsetning_nok=1,
+    )))
+    assert out.omsetning_filter_note == "Backend-forklaringen."
+
+
+def test_omsetning_note_falls_back_when_meta_missing():
+    """Eldre backend uten _meta: agenten skal ALDRI se et
+    omsetnings-filtrert svar uten forklaringen på hva som er utelatt."""
+    stub = _Stub({"items": [], "total_count": 0})
+    out = asyncio.run(handle(stub, SearchCompaniesInput(
+        q="ek", min_omsetning_nok=1,
+    )))
+    assert out.omsetning_filter_note
+    assert "ekskludert" in out.omsetning_filter_note
+
+
+def test_no_omsetning_note_without_filter():
+    stub = _Stub({"items": [], "total_count": 0})
+    out = asyncio.run(handle(stub, SearchCompaniesInput(q="ek")))
+    assert out.omsetning_filter_note is None
