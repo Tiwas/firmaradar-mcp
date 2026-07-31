@@ -1,9 +1,9 @@
-"""Firmaradar MCP stdio-server — v0.3.
+"""Firmaradar MCP server package.
 
-Exposes 17 read-only "melk og brød"-tools (company, person, risk,
-sector, announcement) over the Model Context Protocol so that
-Claude/GPT/n8n and other MCP-aware clients can query Firmaradar
-directly.
+Exposes 35 company, person, risk, compliance and monitoring tools over
+the Model Context Protocol. Tool annotations distinguish read-only
+lookups from operations that mutate private account, audit or report
+state.
 
 See ``tools/mcp_server/README.md`` for setup, and
 ``plans/MCP_V01_INVENTORY.md`` for the tool ↔ REST-endpoint mapping.
@@ -11,5 +11,5 @@ See ``tools/mcp_server/README.md`` for setup, and
 
 from __future__ import annotations
 
-__version__ = "0.5.11"
+__version__ = "0.5.12"
 __all__ = ["__version__"]

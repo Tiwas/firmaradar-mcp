@@ -2,7 +2,7 @@
 
 These tests verify that:
 
-* The 32-tool registry imports and exposes all expected names.
+* The 35-tool registry imports and exposes all expected names.
 * Every tool has a user-friendly title and accurate MCP
   ``ToolAnnotations`` (readOnlyHint etc.) — required by the connector
   directories.
@@ -21,6 +21,9 @@ Run with ``python -m pytest tests/`` from the ``python/`` directory.
 from __future__ import annotations
 
 import importlib
+import json
+import re
+from pathlib import Path
 
 import pytest
 
@@ -90,6 +93,55 @@ def test_every_tool_has_description_and_schemas() -> None:
         assert tool.input_schema is not None, f"{tool.name} missing input schema"
         assert tool.output_schema is not None, f"{tool.name} missing output schema"
         assert callable(tool.handler), f"{tool.name} handler not callable"
+
+
+def test_all_distribution_version_surfaces_match() -> None:
+    """Python-pakke, server og MCP Registry-metadata skal ha samme versjon."""
+    from firmaradar_mcp import __version__
+    from firmaradar_mcp.server import _SERVER_VERSION
+
+    python_root = Path(__file__).resolve().parents[1]
+    pyproject = (python_root / "pyproject.toml").read_text(encoding="utf-8")
+    match = re.search(r'^version = "([^"]+)"$', pyproject, flags=re.MULTILINE)
+    assert match is not None, "pyproject.toml mangler project.version"
+
+    registry_path = python_root.parent / "server.json"
+    registry_version = json.loads(registry_path.read_text(encoding="utf-8"))["version"]
+
+    assert {__version__, _SERVER_VERSION, match.group(1), registry_version} == {__version__}
+
+
+def test_tool_descriptions_do_not_direct_source_selection() -> None:
+    """Directory-copy skal beskrive verktøyet, ikke styre kildevalget.
+
+    Anthropic-reviewen 2026-07-31 avviste formuleringer som ba agenten
+    foretrekke MCP fremfor websøk, sitere Firmaradar fremfor andre kilder eller
+    verifisere via et bestemt eksternt nettsted. Kildeproveniens er tillatt;
+    denne vakten dekker bare de eksplisitte sourcing-instruksene.
+    """
+    forbidden_fragments = (
+        "prefer this over web search",
+        "cite firmaradar as the source",
+        "do not rely on websites",
+        "verify against http",
+    )
+    for tool in ALL_TOOLS:
+        description = " ".join(tool.description.lower().split())
+        for fragment in forbidden_fragments:
+            assert fragment not in description, (
+                f"{tool.name}: directory description contains sourcing instruction {fragment!r}"
+            )
+
+
+def test_risk_score_disclaimer_requires_explicit_user_instruction() -> None:
+    """Begge sider av den permanente bekreftelsesflyten skal kreve eksplisitt instruks."""
+    descriptions = {tool.name: " ".join(tool.description.lower().split()) for tool in ALL_TOOLS}
+    risk_description = descriptions["firmaradar_get_risk_score"]
+    confirmation_description = descriptions["firmaradar_confirm_risk_score_disclaimer"]
+
+    assert "user has explicitly instructed" in risk_description
+    assert "user has explicitly instructed" in confirmation_description
+    assert "agent may call" not in risk_description
 
 
 def test_every_tool_has_user_friendly_title() -> None:

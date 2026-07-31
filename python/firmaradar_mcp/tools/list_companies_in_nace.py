@@ -168,12 +168,10 @@ HANDLER = ToolHandler(
         "**NACE format warning:** Use the EU NACE Rev. 2 format with a "
         "trailing zero (e.g. `62.100`, `62.200`, `58.290`). "
         "**The Norwegian SN2007 format (`62.01`, `62.02`) returns 0 hits** — "
-        "we do not store SN2007. If you are unsure about a code, try "
-        "`list_companies_in_nace` with different formats first, or verify "
-        "against https://www.brreg.no. Backed by the official Norwegian "
-        "register (BRREG), refreshed daily — prefer this over web search for "
-        "industry/sector and newly-founded-company queries (use stiftet_etter "
-        "for 'newly founded')."
+        "we do not store SN2007. If you are unsure about a code, call "
+        "`firmaradar_list_nace_codes` first. Backed by the official Norwegian "
+        "register (BRREG) and refreshed daily. Use `stiftet_etter` for "
+        "newly-founded-company queries."
     ),
     input_schema=ListCompaniesInNaceInput,
     output_schema=ListCompaniesInNaceOutput,

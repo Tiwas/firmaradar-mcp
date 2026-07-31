@@ -11,6 +11,23 @@ workflow-nodene på samme funksjonalitets-baseline.
 
 ---
 
+## [0.5.12] — 2026-07-31
+
+### Changed
+
+- **Claude connector-directory copy aligned with review requirements.** Tool
+  descriptions now state what each tool does, when to call it and what it
+  returns without directing the agent to prefer Firmaradar over web search,
+  avoid external websites or cite a particular source.
+- **Risk-score disclaimer flow now requires explicit user instruction on both
+  tools.** `firmaradar_get_risk_score` tells the agent to inform the user when
+  confirmation is required and permits
+  `firmaradar_confirm_risk_score_disclaimer` only after the user explicitly
+  instructs it. The confirmation remains permanent and audit-logged.
+- **Package description reflects the live 35-tool read/write catalog.** The
+  stale 17-read-only-tool package docstring was replaced with the current
+  capability and annotation model.
+
 ## [0.5.11] — 2026-07-31
 
 ### Changed
