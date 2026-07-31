@@ -11,6 +11,38 @@ workflow-nodene på samme funksjonalitets-baseline.
 
 ---
 
+## [0.6.0] — 2026-07-31
+
+### Changed
+
+- **Migrated to MCP Python SDK 2.0.** SDK 2.0.0 (released 2026-07-31) removed
+  the `@server.list_tools()`/`@server.call_tool()` decorator API entirely;
+  handlers are now wired via `on_list_tools=`/`on_call_tool=` constructor
+  kwargs and receive `(ctx, params)` instead of the old positional
+  arguments. Tool catalog, input/output schemas, error shapes, and
+  text/structured content formatting are unchanged. The dependency pin moves
+  from `mcp>=1.0.0,<2.0` to `mcp>=2.0.0,<3.0`.
+- **`tools/list`: `securitySchemes` moved from a top-level `Tool` field to
+  `Tool._meta.securitySchemes`.** This field is what triggers ChatGPT's
+  inline re-authentication UI (OpenAI Apps SDK). SDK 2.0 validates every
+  `tools/list` response against the protocol's own per-version wire schema
+  and unconditionally drops any top-level field outside that spec —
+  unavoidable regardless of how the handler builds its result, unlike 0.5.11
+  where `mcp_types.Tool` allowed arbitrary top-level extras. `_meta` is the
+  protocol's own open extension point and is the only placement confirmed to
+  survive that validation. **Not yet verified against a live ChatGPT
+  connector** — whether OpenAI's client actually reads `_meta` for this (vs.
+  only the top-level field, which was the original OpenAI-support-confirmed
+  placement from 2026-03) needs a real-world check before this is trusted to
+  preserve the re-auth UX end to end. Claude/Cursor/other clients ignore
+  `securitySchemes` either way, so this has no effect on them.
+- **Dev linting now pins Ruff to the repo gate.** The package `dev` extra uses
+  `ruff>=0.15,<0.16`, matching the repository CI/pre-push range so fresh
+  verification environments do not drift onto newer rule defaults during a
+  release.
+
+---
+
 ## [0.5.12] — 2026-07-31
 
 ### Changed
