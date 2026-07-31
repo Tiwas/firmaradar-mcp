@@ -2,10 +2,11 @@
 
 Side-by-side financial comparison of up to 5 companies.
 
-Backend status: **GAP** — needs ``POST /api/v1/companies/compare`` to
-orchestrate parallel calls to
-``financial_metrics_history_payload()`` and return aligned year/metric
-matrices. See ``plans/MCP_V01_INVENTORY.md`` tool #16.
+Client-side orchestration: parallel calls to the financials-history
+endpoint per orgnr, aligned into year/metric matrices. ``antall_ansatte``
+is a current-value register attribute (no per-year history) and is served
+as a scalar per orgnr — the same semantics as the server-side
+``POST /api/v1/companies/compare`` endpoint.
 """
 
 from __future__ import annotations
@@ -52,7 +53,22 @@ class CompareCompaniesOutput(BaseModel):
     orgnrs: list[str]
     years: list[int]
     comparison: dict[str, dict[str, list[Any]]] = Field(
-        description="{<metric>: {<orgnr>: [<value_per_year>, ...]}}",
+        description=(
+            "{<metric>: {<orgnr>: [<value_per_year>, ...]}}. For "
+            "`antall_ansatte` the per-year lists are always null — headcount "
+            "does not exist per fiscal year; use the top-level "
+            "`antall_ansatte` field instead."
+        ),
+    )
+    antall_ansatte: dict[str, int | None] | None = Field(
+        default=None,
+        description=(
+            "{<orgnr>: <current headcount|null>}. Present only when "
+            "`antall_ansatte` is in the requested metric set. CURRENT value "
+            "from Enhetsregisteret (the register attribute has no per-year "
+            "history), mirroring `companies[].antall_ansatte` on the "
+            "server-side compare endpoint. Null when unknown."
+        ),
     )
     currencies: dict[str, list[str | None]] | None = Field(
         default=None,
@@ -68,6 +84,39 @@ class CompareCompaniesOutput(BaseModel):
     summary: str | None = None
 
 
+def _naaverdi_antall_ansatte(payload: dict[str, Any]) -> int | None:
+    """Nåværende antall ansatte fra historikk-payloaden vi allerede henter.
+
+    ``antall_ansatte`` finnes ikke per regnskapsår (register-attributt, ikke
+    et regnskaps-felt), men backend injiserer nåverdien i payloadens
+    ``foretaksklassifisering.<lov>.kriterier.ansatte.verdi``. Å lese den
+    derfra koster null ekstra API-kall — samme kilde som `companies[].
+    antall_ansatte` på server-side compare-endepunktet. Selskap uten noen
+    regnskapsår klassifiseres uten ansatte-tall → None (feltet er da uansett
+    tomt over hele linja for det selskapet)."""
+    fk = payload.get("foretaksklassifisering")
+    if not isinstance(fk, dict):
+        return None
+    for lov in ("regnskapsloven", "aksjeloven"):
+        node = fk.get(lov)
+        if not isinstance(node, dict):
+            continue
+        kriterier = node.get("kriterier")
+        if not isinstance(kriterier, dict):
+            continue
+        ansatte = kriterier.get("ansatte")
+        if not isinstance(ansatte, dict):
+            continue
+        verdi = ansatte.get("verdi")
+        if verdi is None or isinstance(verdi, bool):
+            continue
+        try:
+            return int(verdi)
+        except (TypeError, ValueError):
+            continue
+    return None
+
+
 async def handle(
     client: FirmaradarClient, params: CompareCompaniesInput
 ) -> CompareCompaniesOutput:
@@ -77,14 +126,16 @@ async def handle(
     optimalisering hvis bulk-volum krever det."""
     metrics = params.metrics or _STANDARD_METRICS
 
-    async def _fetch(orgnr: str) -> tuple[str, dict[int, dict[str, Any]]]:
+    async def _fetch(
+        orgnr: str,
+    ) -> tuple[str, dict[int, dict[str, Any]], int | None]:
         try:
             payload = await client.get(
                 f"/api/regnskap/{orgnr}/historikk",
                 params={"years": params.years},
             )
             if not isinstance(payload, dict):
-                return orgnr, {}
+                return orgnr, {}, None
             # Lars-runde-2-fix 2026-05-26: backend bruker "items"/"regnskapsar",
             # ikke "years"/"aar".
             items = payload.get("items") or payload.get("years") or []
@@ -97,12 +148,13 @@ async def handle(
                     year_map[int(year_val)] = y
                 except (TypeError, ValueError):
                     continue
-            return orgnr, year_map
+            return orgnr, year_map, _naaverdi_antall_ansatte(payload)
         except FirmaradarClientError:
-            return orgnr, {}
+            return orgnr, {}, None
 
     results = await asyncio.gather(*[_fetch(o) for o in params.orgnrs])
-    per_orgnr_data = dict(results)
+    per_orgnr_data = {orgnr: year_map for orgnr, year_map, _ in results}
+    ansatte_naaverdi = {orgnr: ansatte for orgnr, _, ansatte in results}
 
     # Samle unike år på tvers av alle selskap, sortert.
     all_years_set: set[int] = set()
@@ -113,6 +165,11 @@ async def handle(
     # Map MCP-tool-metric-navn til backend-feltnavn (BRREG-konvensjon).
     # Lars-runde-2-fix 2026-05-26: backend bruker "driftsinntekter" (ikke
     # "omsetning"), "egenkapital" (ikke "sum_egenkapital").
+    # MERK: `antall_ansatte` finnes IKKE i regnskapsår-items — år-matrisen for
+    # den metric-en forblir BEVISST None-lister (aldri fabrikkert som flat
+    # år-serie av nåverdien). Den brukbare verdien serveres i stedet som
+    # NÅVERDI per orgnr i toppnivå-feltet `antall_ansatte` — samme semantikk
+    # som server-side compare-endepunktet.
     _METRIC_FIELD_MAP = {
         "omsetning": "driftsinntekter",
         "driftsresultat": "driftsresultat",
@@ -181,6 +238,11 @@ async def handle(
         orgnrs=params.orgnrs,
         years=years_sorted,
         comparison=comparison,
+        antall_ansatte=(
+            {o: ansatte_naaverdi.get(o) for o in params.orgnrs}
+            if "antall_ansatte" in metrics
+            else None
+        ),
         currencies=currencies or None,
         computed_at=datetime.now(timezone.utc).isoformat(),
         summary=summary,
@@ -195,7 +257,10 @@ HANDLER = ToolHandler(
         "competitor analysis, benchmark research or 'which of these three "
         "companies is the strongest?' Amounts are in each company's "
         "reporting currency (see the `currencies` field; NOK for most "
-        "Norwegian companies) — check it before comparing absolute amounts."
+        "Norwegian companies) — check it before comparing absolute amounts. "
+        "`antall_ansatte` is a CURRENT-value register attribute with no "
+        "per-year history: read it from the top-level `antall_ansatte` field "
+        "({orgnr: headcount}); its rows in `comparison` are always null."
     ),
     input_schema=CompareCompaniesInput,
     output_schema=CompareCompaniesOutput,

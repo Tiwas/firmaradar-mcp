@@ -11,6 +11,51 @@ workflow-nodene på samme funksjonalitets-baseline.
 
 ---
 
+## [0.5.11] — 2026-07-31
+
+### Changed
+
+- **`firmaradar_get_person` is now a single call.** The tool calls the
+  server-side aggregate `GET /api/v1/person/{person_id}` instead of
+  dispatching client-side between the roles- and shareholdings-endpoints and
+  assembling `summary` itself. The response shape is unchanged, plus a new
+  optional `aml_pep_note` field that passes through the backend's framing:
+  this profile lookup performs **no** PEP/sanctions screening, so an empty
+  `aml_pep_hits` is not a clean bill — use `firmaradar_check_aml_pep` or
+  `firmaradar_start_aml_report` for an actual screening.
+- **`firmaradar_search_companies` name-search now uses the unified
+  `GET /api/v1/companies/search` endpoint** with server-side status
+  filtering, replacing the client-side hybrid on the q-path.
+
+### Added
+
+- **`firmaradar_compare_companies`: `antall_ansatte` as a current value.**
+  New top-level `antall_ansatte` field (`{orgnr: headcount}`), present when
+  the metric is in the requested set. Headcount is a current-value register
+  attribute with no per-year history, so the per-year rows for
+  `antall_ansatte` in `comparison` remain null (never fabricated as a flat
+  series) — the same semantics as the server-side compare endpoint.
+  Previously the metric was silently null everywhere in the tool output.
+- **`firmaradar_search_companies`: `fylke` filter now actually applied.**
+  The parameter existed in the schema since v0.2 but was never sent to the
+  backend. It is now passed through on the q-path, and `nace`+`fylke`
+  combinations route to the unified search endpoint (the NACE endpoint does
+  not support fylke — previously the filter was silently ignored).
+- **`firmaradar_search_companies`: revenue-range filter.** New
+  `min_omsetning_nok`/`max_omsetning_nok` parameters, enforced server-side.
+  Companies without a revenue figure are excluded when the range is set;
+  the response carries an `omsetning_filter_note` explaining the exclusion
+  rule when the filter is active.
+
+### Fixed
+
+- **`firmaradar_add_company_monitoring` documents the per-company cap.**
+  The tool description now covers the 403 `monitoring_cap_reached` error
+  (the cap counts distinct monitored companies across all users of the
+  caller's company; already-monitored companies are exempt).
+
+---
+
 ## [0.5.10] — 2026-07-16
 
 ### Changed

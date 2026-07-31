@@ -478,22 +478,32 @@ def test_dispatching_client_forwards_timeout_s() -> None:
     )
 
 
-async def test_get_person_surfaces_konkurs_eksponering() -> None:
-    """``get_person`` skal løfte backendens ``konkurs_eksponering`` inn i
-    output-en for rolle-personer — flagg-for-gjennomgang-signalet fra den
-    daterte rollehistorikken."""
+async def test_get_person_single_aggregate_call_surfaces_konkurs() -> None:
+    """``get_person`` er ETT kall mot server-side-aggregatet
+    ``/api/v1/person/<id>`` — ingen klient-side dispatch mot roles-/
+    shareholdings-endepunktene. Backendens ``konkurs_eksponering``
+    (flagg-for-gjennomgang-signalet) løftes rett inn i output-en."""
     from firmaradar_mcp.tools.get_person import GetPersonInput, handle
+
+    pid = "role-" + "a" * 24
+    calls: list[str] = []
 
     class _StubClient:
         async def get(self, path, params=None):
-            assert path.startswith("/api/v1/person/roles/")
+            calls.append(path)
+            assert path == f"/api/v1/person/{pid}"
             return {
-                "name": "Ola Nordmann",
+                "person_id": pid,
+                "navn": "Ola Nordmann",
                 "birth_year": 1970,
-                "companies": [
-                    {"orgnr": "111111111", "company_name": "Aktiv AS", "active": True,
-                     "rolle_type": "Styrets leder"},
+                "summary": "Ola Nordmann, 1 aktive verv",
+                "active_roles": [
+                    {"orgnr": "111111111", "company_name": "Aktiv AS",
+                     "rolle_type": "Styrets leder", "active": True},
                 ],
+                "shareholdings": [],
+                "aml_pep_hits": [],
+                "aml_pep_note": "Dette oppslaget gjør ingen PEP-sjekk.",
                 "konkurs_eksponering": {
                     "antall_konkursforetak": 2,
                     "foretak": [
@@ -508,21 +518,30 @@ async def test_get_person_surfaces_konkurs_eksponering() -> None:
                 },
             }
 
-    out = await handle(_StubClient(), GetPersonInput(person_id="role-" + "a" * 24))
+    out = await handle(_StubClient(), GetPersonInput(person_id=pid))
+    assert calls == [f"/api/v1/person/{pid}"]
+    assert out.navn == "Ola Nordmann"
+    assert out.birth_year == 1970
+    assert out.summary == "Ola Nordmann, 1 aktive verv"
+    assert len(out.active_roles) == 1
+    assert out.aml_pep_hits == []
+    assert "PEP" in (out.aml_pep_note or "")
     assert out.konkurs_eksponering.get("antall_konkursforetak") == 2
     assert len(out.konkurs_eksponering.get("foretak") or []) == 2
     assert "flagg" in (out.konkurs_eksponering.get("note") or "").lower()
 
 
 async def test_get_person_no_konkurs_eksponering_stays_empty() -> None:
-    """Uten treff (eller antall=0) skal feltet forbli tomt, ikke støy."""
+    """Uten treff (antall=0) skal feltet forbli tomt, ikke støy —
+    tom-normaliseringen fra fan-out-varianten består i aggregat-kallet."""
     from firmaradar_mcp.tools.get_person import GetPersonInput, handle
 
     class _StubClient:
         async def get(self, path, params=None):
             return {
-                "name": "Kari Ren",
-                "companies": [],
+                "navn": "Kari Ren",
+                "active_roles": [],
+                "shareholdings": [],
                 "konkurs_eksponering": {"antall_konkursforetak": 0, "foretak": [], "note": ""},
             }
 
@@ -530,18 +549,21 @@ async def test_get_person_no_konkurs_eksponering_stays_empty() -> None:
     assert out.konkurs_eksponering == {}
 
 
-async def test_get_person_shareholder_key_surfaces_navn_and_konkurs() -> None:
-    """Aksjonær-nøkkel (``person-YYYY-…``): aksjeeier-recorden bruker
-    ``owner_name`` (ikke ``name``). Uten owner_name-fallbacken ble navn=""
-    → konkurs-eksponering-matchen feilet. Regresjon for
-    `person-2025-110a167ab75b76464b231f5f` (Karl Petter Ulriksen → 3 foretak)."""
+async def test_get_person_shareholder_key_same_shape() -> None:
+    """Aksjonær-nøkkel (``person-YYYY-…``) går mot samme aggregat og gir
+    samme nøkkelsett — aggregatet normaliserer owner_name/name-forskjellen
+    server-side. Regresjon for `person-2025-110a167ab75b76464b231f5f`
+    (Karl Petter Ulriksen → 3 foretak)."""
     from firmaradar_mcp.tools.get_person import GetPersonInput, handle
+
+    pid = "person-2025-" + "a" * 24
 
     class _StubClient:
         async def get(self, path, params=None):
-            assert path.startswith("/api/v1/person/shareholdings/")
+            assert path == f"/api/v1/person/{pid}"
             return {
-                "owner_name": "KARL PETTER ULRIKSEN",
+                "person_id": pid,
+                "navn": "KARL PETTER ULRIKSEN",
                 "birth_year": 1973,
                 "shareholdings": [
                     {"child_orgnr": "991045368", "company_name": "FRIHETEN INVEST AS",
@@ -558,11 +580,30 @@ async def test_get_person_shareholder_key_surfaces_navn_and_konkurs() -> None:
                 },
             }
 
-    out = await handle(_StubClient(), GetPersonInput(person_id="person-2025-" + "a" * 24))
+    out = await handle(_StubClient(), GetPersonInput(person_id=pid))
     assert out.navn == "KARL PETTER ULRIKSEN"
     assert out.birth_year == 1973
     assert out.konkurs_eksponering.get("antall_konkursforetak") == 3
     assert len(out.shareholdings) == 1
+
+
+async def test_get_person_client_error_degrades_to_empty_profile() -> None:
+    """Ukjent/ugyldig ID: klient-feil svelges og gir tom profil — samme
+    degradering som fan-out-varianten hadde (aldri exception ut av tool-et)."""
+    from firmaradar_mcp.client import FirmaradarClientError
+    from firmaradar_mcp.tools.get_person import GetPersonInput, handle
+
+    class _StubClient:
+        async def get(self, path, params=None):
+            raise FirmaradarClientError("404 fra aggregatet")
+
+    pid = "role-" + "c" * 24
+    out = await handle(_StubClient(), GetPersonInput(person_id=pid))
+    assert out.person_id == pid
+    assert out.navn == ""
+    assert out.active_roles == []
+    assert out.shareholdings == []
+    assert out.konkurs_eksponering == {}
 
 
 async def test_check_konkurs_eksponering_name_lookup() -> None:

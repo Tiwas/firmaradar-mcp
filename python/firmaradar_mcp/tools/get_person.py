@@ -1,12 +1,12 @@
 """Tool: ``get_person``.
 
 Unified summary for one person — active roles + shareholdings +
-AML/PEP risk flags in a single payload.
+bankruptcy-exposure review flag in a single payload.
 
-Backend status: **PARTIAL** — shareholdings and roles each have their
-own endpoint, but no aggregate. v0.1 may fan out client-side; a
-server-side ``GET /api/v1/person/<id>`` aggregate is recommended for
-v0.2. See ``plans/MCP_V01_INVENTORY.md`` tool #8.
+Backend: ``GET /api/v1/person/{person_id}`` — the server-side aggregate.
+The endpoint resolves the ID variant itself (``person-YYYY-…`` gives
+shareholdings, ``role-…`` gives active roles) and normalizes both to the
+same key set, so this tool is a single call with no client-side dispatch.
 """
 
 from __future__ import annotations
@@ -43,6 +43,11 @@ class GetPersonOutput(BaseModel):
     active_roles: list[dict[str, Any]] = Field(default_factory=list)
     shareholdings: list[dict[str, Any]] = Field(default_factory=list)
     aml_pep_hits: list[dict[str, Any]] = Field(default_factory=list)
+    # Rammen fra backend: dette oppslaget gjør INGEN PEP-/sanksjonssjekk, så en
+    # tom `aml_pep_hits` betyr ikke «ingen treff». Uten denne noten kan en
+    # agent-/CRM-flyt konkludere at personen er ren — bruk `check_aml_pep` /
+    # `start_aml_report` for et faktisk oppslag.
+    aml_pep_note: str | None = None
     # Name-based bankruptcy exposure ("konkursgjenganger"): leadership roles this
     # person held in companies that later went bankrupt, tenure-weighted, from the
     # dated role history. Since the match is by NAME (no national ID number), this
@@ -53,99 +58,56 @@ class GetPersonOutput(BaseModel):
 async def handle(
     client: FirmaradarClient, params: GetPersonInput
 ) -> GetPersonOutput:
-    # v0.1: to-call client-side fan-out (Lars-beslutning 2026-05-25).
-    # Server-side aggregat utsatt til v0.2 — agenten kaller begge
-    # endepunkter selv og vi sammenstiller her.
+    # Server-side-aggregatet samler navn, aktive verv, aksjeposter, summary og
+    # konkurs-eksponering i ETT kall — svarformen er identisk med det den
+    # tidligere to-kalls fan-out-varianten sammenstilte klient-side.
+    # `purpose` beholdes i input-skjemaet (F10.11-kontrakten); GET-stien i
+    # klienten sender ingen ekstra headers — uendret fra fan-out-varianten.
     pid = params.person_id
-    headers_extra: dict[str, str] = {}
-    if params.purpose:
-        headers_extra["X-FR-Purpose"] = params.purpose
 
-    navn = ""
+    payload: dict[str, Any] = {}
+    try:
+        raw = await client.get(f"/api/v1/person/{pid}")
+        if isinstance(raw, dict):
+            payload = raw
+    except FirmaradarClientError:
+        # Samme degradering som fan-out-varianten: ukjent ID, ugyldig
+        # ID-format eller manglende tilgang gir en tom profil — ikke en feil.
+        payload = {}
+
+    navn = str(payload.get("navn") or "")
+
     birth_year: int | None = None
-    active_roles: list[dict[str, Any]] = []
-    shareholdings: list[dict[str, Any]] = []
+    by_raw = payload.get("birth_year")
+    if by_raw is not None:
+        try:
+            birth_year = int(by_raw)
+        except (TypeError, ValueError):
+            pass
+
+    summary_raw = payload.get("summary")
+    summary = summary_raw if isinstance(summary_raw, str) else None
+
+    active_roles = [
+        r for r in (payload.get("active_roles") or []) if isinstance(r, dict)
+    ]
+    shareholdings = [
+        s for s in (payload.get("shareholdings") or []) if isinstance(s, dict)
+    ]
+    aml_pep_hits = [
+        h for h in (payload.get("aml_pep_hits") or []) if isinstance(h, dict)
+    ]
+
+    note_raw = payload.get("aml_pep_note")
+    aml_pep_note = note_raw if isinstance(note_raw, str) else None
+
+    # Aggregatet serverer alltid en konkurs-eksponering-blokk (også ved 0
+    # treff). Tom-normaliseringen beholdes fra fan-out-varianten: uten treff
+    # forblir feltet `{}` i stedet for en null-blokk med tom note.
     konkurs_eksponering: dict[str, Any] = {}
-
-    # Hvilken type ID er det? Avgjør hvilke endepunkter vi kaller.
-    is_role = pid.startswith("role-")
-    is_shareholder = pid.startswith("person-")
-
-    if is_role:
-        try:
-            roles_payload = await client.get(f"/api/v1/person/roles/{pid}")
-            if isinstance(roles_payload, dict):
-                # Lars-runde-2-fix 2026-05-26: backend bruker "name" +
-                # "companies" + "birth_year" + "role_types[]". Tool-stub
-                # antok "navn" + "roles" — schema-mismatch.
-                navn = roles_payload.get("name") or roles_payload.get("navn") or navn
-                ke = roles_payload.get("konkurs_eksponering")
-                if isinstance(ke, dict) and ke.get("antall_konkursforetak"):
-                    konkurs_eksponering = ke
-                by_raw = roles_payload.get("birth_year")
-                if by_raw is not None:
-                    try:
-                        birth_year = int(by_raw)
-                    except (TypeError, ValueError):
-                        pass
-                for c in roles_payload.get("companies") or roles_payload.get("roles") or []:
-                    if not isinstance(c, dict):
-                        continue
-                    # Bare aktive roller (active=true eller manglende til_dato)
-                    is_active = c.get("active")
-                    if is_active is False:
-                        continue
-                    if is_active is None and c.get("til_dato"):
-                        continue
-                    role_types = c.get("role_types") or (
-                        [c["rolle_type"]] if c.get("rolle_type") else []
-                    )
-                    for rt in role_types or [None]:
-                        active_roles.append({
-                            "orgnr": c.get("orgnr"),
-                            "company_name": c.get("company_name") or c.get("navn"),
-                            "rolle_type": rt,
-                            "founded_year": c.get("founded_year"),
-                            "active": is_active if is_active is not None else True,
-                        })
-        except FirmaradarClientError:
-            pass
-
-    if is_shareholder:
-        try:
-            sh_payload = await client.get(f"/api/v1/person/shareholdings/{pid}")
-            if isinstance(sh_payload, dict):
-                # Aksjeeier-recorden bruker "owner_name" (rolle-recorden bruker
-                # "name"). Uten owner_name-fallbacken ble navn="" → konkurs-
-                # eksponering-matchen mot roller_history feilet stille.
-                navn = (
-                    sh_payload.get("owner_name")
-                    or sh_payload.get("name")
-                    or sh_payload.get("navn")
-                    or navn
-                )
-                shareholdings = list(sh_payload.get("shareholdings") or [])
-                ke = sh_payload.get("konkurs_eksponering")
-                if isinstance(ke, dict) and ke.get("antall_konkursforetak"):
-                    konkurs_eksponering = ke
-                by_raw = sh_payload.get("birth_year")
-                if by_raw is not None and birth_year is None:
-                    try:
-                        birth_year = int(by_raw)
-                    except (TypeError, ValueError):
-                        pass
-        except FirmaradarClientError:
-            pass
-
-    # Bygg kort summary
-    summary_parts = []
-    if navn:
-        summary_parts.append(navn)
-    if active_roles:
-        summary_parts.append(f"{len(active_roles)} aktive verv")
-    if shareholdings:
-        summary_parts.append(f"{len(shareholdings)} aksjeposter")
-    summary = ", ".join(summary_parts) if summary_parts else None
+    ke = payload.get("konkurs_eksponering")
+    if isinstance(ke, dict) and ke.get("antall_konkursforetak"):
+        konkurs_eksponering = ke
 
     return GetPersonOutput(
         person_id=pid,
@@ -154,7 +116,8 @@ async def handle(
         summary=summary,
         active_roles=active_roles,
         shareholdings=shareholdings,
-        aml_pep_hits=[],  # eget tool, ikke fan-out her — sparer rate-limit
+        aml_pep_hits=aml_pep_hits,
+        aml_pep_note=aml_pep_note,
         konkurs_eksponering=konkurs_eksponering,
     )
 
@@ -167,9 +130,12 @@ HANDLER = ToolHandler(
         "`konkurs_eksponering` — leadership roles the person held in companies "
         "that later went bankrupt (tenure-weighted, from the dated role "
         "history). That match is name-based (no national ID), so it is a "
-        "REVIEW FLAG to verify, not a verdict. Strict PII-sensitive — requires "
-        "search_full_enabled tier and F10.11 purpose confirmation. Minors are "
-        "blocked except for super-admin accounts."
+        "REVIEW FLAG to verify, not a verdict. Note: this profile lookup does "
+        "NOT run a PEP/sanctions screening — an empty `aml_pep_hits` is not a "
+        "clean bill; use `firmaradar_check_aml_pep` for an actual screening. "
+        "Strict PII-sensitive — requires search_full_enabled tier and F10.11 "
+        "purpose confirmation. Minors are blocked except for super-admin "
+        "accounts."
     ),
     input_schema=GetPersonInput,
     output_schema=GetPersonOutput,
