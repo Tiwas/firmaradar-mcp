@@ -67,6 +67,17 @@ class AmlPepHit(BaseModel):
     # confirmed same-entity hit — verify manually, never treat as authoritative.
     weak_match: bool = False
     ekstern_id: str | None = None
+    # Date-verifiability of the hit (all categories). `fodselsdato` is the
+    # register row's birth date/year (free-form); `fodselsdato_mangler: true`
+    # means the row has NO birth date — the match is name-only and the identity
+    # CANNOT be date-verified. Verify manually before weighting such hits.
+    # Explicit flag (not just `fodselsdato: null`) per the 2026-07-31
+    # transparency decision. Always False for entitet_type=organisasjon
+    # (companies have no birth date). Note: a `birth_year` query filter only
+    # excludes rows that HAVE a year — dateless rows pass through carrying
+    # this flag.
+    fodselsdato: str | None = None
+    fodselsdato_mangler: bool = False
     # PEP context — populated only for `kategori == "pep"` hits (None for sanctions).
     # `pep_status` ∈ {aktiv, tidligere, historisk}; `embete` is the class-level office
     # (e.g. "Statsråd/minister"); `verv_fra`/`verv_til` are the collapsed ISO period.
@@ -79,6 +90,20 @@ class AmlPepHit(BaseModel):
     # specific position label ("næringsminister") when resolved; empty for sanctions
     # and for PEP rows seeded before title enrichment.
     verv_historikk: list[dict[str, Any]] = Field(default_factory=list)
+    # RCA marking (related/close-associate transparency). `pep_type` ∈
+    # {direkte, rca_familie, rca_medarbeider}: rca_* = person RELATED to a PEP,
+    # not themselves politically exposed. `relasjon` is display prose («Søsken
+    # av Ola Nordmann»); `relasjon_kode` the stable form (far/mor/ektefelle/
+    # barn/sosken/barns_ektefelle). `relasjon_innenfor_direktivet` is
+    # TRI-STATE: True = listed in AML-law § 2 g close-family circle; False =
+    # outside it (siblings — included as a signal, not a required match);
+    # None = UNKNOWN (pre-migration rows) — never treat None as "outside".
+    # `matchgrunnlag` ∈ {navn_alene, navn_og_fodselsaar} (family-RCA only).
+    pep_type: str | None = None
+    relasjon: str | None = None
+    relasjon_kode: str | None = None
+    relasjon_innenfor_direktivet: bool | None = None
+    matchgrunnlag: str | None = None
 
 
 class CheckAmlPepOutput(BaseModel):

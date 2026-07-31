@@ -148,19 +148,19 @@ def test_list_tools_advertises_titles_and_annotations() -> None:
         ann = tool.annotations
         assert ann.title == tool.title, f"{tool.name}: annotation-title != tool-title"
         expected_read_only = tool.name not in WRITE_TOOLS
-        assert ann.readOnlyHint is expected_read_only, (
+        assert ann.read_only_hint is expected_read_only, (
             f"{tool.name}: readOnlyHint skal være {expected_read_only}"
         )
         expected_destructive = tool.name in DESTRUCTIVE_TOOLS
-        assert ann.destructiveHint is expected_destructive, (
+        assert ann.destructive_hint is expected_destructive, (
             f"{tool.name}: destructiveHint skal være {expected_destructive}"
         )
         expected_open_world = tool.name in OPEN_WORLD_TOOLS
-        assert ann.openWorldHint is expected_open_world, (
+        assert ann.open_world_hint is expected_open_world, (
             f"{tool.name}: openWorldHint skal være {expected_open_world}"
         )
         expected_idempotent = tool.name not in NON_IDEMPOTENT_TOOLS
-        assert ann.idempotentHint is expected_idempotent, (
+        assert ann.idempotent_hint is expected_idempotent, (
             f"{tool.name}: idempotentHint skal være {expected_idempotent}"
         )
 
@@ -175,16 +175,61 @@ def test_every_tool_advertises_output_schema() -> None:
 
     for handler in ALL_TOOLS:
         tool = server._handler_to_tool(handler)
-        assert tool.outputSchema is not None, f"{tool.name} mangler outputSchema"
+        assert tool.output_schema is not None, f"{tool.name} mangler outputSchema"
         # Pydantic-genererte skjemaer for BaseModel er alltid objekt-skjemaer.
-        assert tool.outputSchema.get("type") == "object", (
+        assert tool.output_schema.get("type") == "object", (
             f"{tool.name}: outputSchema skal være et objekt-skjema"
         )
         # Skjemaet skal beskrive minst ett felt (properties) ELLER referere
         # nøstede modeller via $defs — tomt skjema er en feil.
-        assert tool.outputSchema.get("properties") or tool.outputSchema.get("$defs"), (
+        assert tool.output_schema.get("properties") or tool.output_schema.get("$defs"), (
             f"{tool.name}: outputSchema mangler properties/$defs"
         )
+
+
+async def test_tool_list_wire_preserves_security_schemes_under_meta() -> None:
+    """Regresjon (mcp 2.0-migrering): ``tools/list``-svaret MÅ beholde
+    ``securitySchemes`` under ``_meta`` på hvert verktøy — ChatGPT sin
+    inline re-auth-UI trigges av dette feltet (se kommentaren ved
+    ``_TOOL_SECURITY_SCHEMES`` i ``server.py`` for hele historikken).
+
+    mcp_types 2.0.0 kjører EN EKSTRA revalidering for spec-metoder
+    (``mcp_types.methods.serialize_server_result``, kalt fra
+    ``ServerRunner._serialize``) OVENPÅ handler-returen, med
+    ``extra="ignore"`` mot protokollens eget skjema — ETHVERT top-level felt
+    utenfor spec-en droppes UANSETT retur-form (dict, ListToolsResult, eller
+    en ``extra="allow"``-subclass). Et unit-nivå-kall på den registrerte
+    handleren alene (uten denne silen) IKKE ville fanget dette — testen
+    kjører derfor de to SAMME ekte SDK-funksjonene som
+    ``ServerRunner._serialize`` bruker, i samme rekkefølge."""
+    from mcp.server.runner import _dump_result
+    from mcp_types.methods import serialize_server_result
+
+    from firmaradar_mcp import server
+    from firmaradar_mcp.tools import ALL_TOOLS as _tools
+
+    srv = server.build_server(_tools, client=object())
+    entry = srv.get_request_handler("tools/list")
+    assert entry is not None, "on_list_tools ble ikke registrert på tools/list"
+
+    result = await entry.handler(None, None)
+    dumped = _dump_result(result)
+    wire = serialize_server_result("tools/list", "2025-06-18", dumped)
+
+    assert len(wire["tools"]) == len(_tools)
+    for tool_wire in wire["tools"]:
+        meta = tool_wire.get("_meta") or {}
+        assert meta.get("securitySchemes") == [{"type": "oauth2", "scopes": ["mcp"]}], (
+            f"{tool_wire.get('name')}: _meta.securitySchemes mangler i tools/list-wire-responsen"
+        )
+        # Regresjonsvakt: dette feltet skal IKKE ligge top-level (det ble
+        # flyttet nettopp fordi top-level ikke overlever silen over).
+        assert "securitySchemes" not in tool_wire, (
+            f"{tool_wire.get('name')}: securitySchemes ligger top-level — "
+            "skal ligge under _meta (se _TOOL_SECURITY_SCHEMES-kommentaren)"
+        )
+        assert "outputSchema" in tool_wire, f"{tool_wire.get('name')}: outputSchema mangler på wire"
+        assert "annotations" in tool_wire, f"{tool_wire.get('name')}: annotations mangler på wire"
 
 
 def test_error_result_is_flagged_and_unstructured() -> None:
@@ -193,8 +238,8 @@ def test_error_result_is_flagged_and_unstructured() -> None:
     from firmaradar_mcp import server
 
     res = server._error_result({"error": "boom", "tool": "x"})
-    assert res.isError is True
-    assert res.structuredContent is None
+    assert res.is_error is True
+    assert res.structured_content is None
     assert res.content and res.content[0].type == "text"
 
 
