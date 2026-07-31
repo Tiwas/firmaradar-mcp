@@ -19,7 +19,7 @@ import sys
 from typing import Any
 
 from mcp import types
-from mcp.server import NotificationOptions, Server, ServerRequestContext
+from mcp.server import NotificationOptions, Server
 from mcp.server.models import InitializationOptions
 from mcp.server.stdio import stdio_server
 from pydantic import BaseModel
@@ -42,7 +42,7 @@ _LOG = logging.getLogger("firmaradar_mcp.server")
 # Holdes stabilt på tvers av versjoner så bruker ikke får "ny server"-prompt
 # ved hver oppgradering.
 _SERVER_NAME = "firmaradar-mcp"
-_SERVER_VERSION = "0.6.0"
+_SERVER_VERSION = "0.5.11"
 
 # Server-nivå instructions: gis til klienten i initialize-responsen og brukes
 # av LLM-en som kontekst om hva Firmaradar dekker. Forhindrer at modellen
@@ -208,23 +208,18 @@ def _handler_to_tool(handler: ToolHandler) -> types.Tool:
         name=handler.name,
         title=title,
         description=handler.description,
-        input_schema=_input_schema_to_json(handler),
-        output_schema=_output_schema_to_json(handler),
+        inputSchema=_input_schema_to_json(handler),
+        outputSchema=_output_schema_to_json(handler),
         annotations=types.ToolAnnotations(
             title=title,
-            read_only_hint=read_only,
-            destructive_hint=destructive,
-            idempotent_hint=idempotent,
-            open_world_hint=open_world,
+            readOnlyHint=read_only,
+            destructiveHint=destructive,
+            idempotentHint=idempotent,
+            openWorldHint=open_world,
         ),
-        # securitySchemes lever under _meta, IKKE som top-level Tool-felt —
-        # se _TOOL_SECURITY_SCHEMES-kommentaren for hvorfor det er den ENESTE
-        # plasseringen som overlever tools/list sin wire-serialisering i 2.0.
-        # NB: _meta (ikke meta) — Tool.meta sin alias er eksplisitt satt via
-        # Field(alias=...), så det er navnet mypy faktisk gjenkjenner som
-        # kwarg (i motsetning til input_schema/output_schema sin generiske
-        # alias_generator, der mypy vil ha feltnavnet).
-        _meta={"securitySchemes": _TOOL_SECURITY_SCHEMES},
+        # securitySchemes — OpenAI Apps SDK krever dette + runtime-_meta for
+        # ChatGPT inline re-auth. Top-level extra-felt; ignoreres av Claude.
+        securitySchemes=_TOOL_SECURITY_SCHEMES,
     )
 
 
@@ -283,28 +278,10 @@ _REAUTH_WWW_AUTHENTICATE = (
 _REAUTH_META: dict[str, Any] = {"mcp/www_authenticate": [_REAUTH_WWW_AUTHENTICATE]}
 
 # Per-verktøy securitySchemes — OpenAI Apps SDK krever dette i tillegg til
-# runtime-``_meta`` for at ChatGPT sin inline re-auth-UI skal trigges.
-#
-# BEVISST plassert under ``Tool.meta``/``_meta``, IKKE som top-level felt
-# (slik det lå til og med 0.5.11, da mcp_types sin ``Tool`` hadde
-# ``extra="allow"``): mcp_types 2.0.0 sin per-metode wire-sieve
-# (``mcp_types.methods.serialize_server_result``, kjørt av
-# ``ServerRunner._serialize`` for alle spec-metoder inkl. ``tools/list``)
-# validerer resultatet mot protokollens EGEN skjema med ``extra="ignore"`` —
-# ETHVERT top-level felt utenfor spec-en droppes ubetinget, uansett om
-# handleren returnerer en ``ListToolsResult``, et rått dict, eller en
-# ``Tool``-subclass med ``extra="allow"``. ``_meta`` er derimot et ekte
-# deklarert felt (åpen ``dict[str, Any]``) og er protokollens SANKSJONERTE
-# utvidelsespunkt — verifisert å overleve hele pipeline (_dump_result +
-# serialize_server_result) mot ekte ``mcp==2.0.0`` på alle forhandlingsbare
-# protokollversjoner. Se ``_handler_to_tool``.
-#
-# KJENT RISIKO (uverifisert herfra): dette ER en wire-formendring — feltet
-# flytter fra ``tool.securitySchemes`` til ``tool._meta.securitySchemes``.
-# Om OpenAI sin Apps SDK-klient faktisk leser ``_meta`` for dette (vs. kun
-# top-level, som var den opprinnelig OpenAI-support-bekreftede plasseringen
-# 2026-03) er IKKE bekreftet — krever test mot en ekte ChatGPT-connector
-# før dette strekkes til å garantere at re-auth-UI-en fortsatt trigges.
+# runtime-``_meta`` for at ChatGPT sin inline re-auth-UI skal trigges. MCP-
+# SDK 1.27 sin ``Tool`` har ``extra="allow"``, så et top-level
+# ``securitySchemes``-felt (det navnet OpenAI dokumenterer) serialiseres
+# rent. Ikke et standard MCP-felt → ignoreres av Claude/Cursor.
 _TOOL_SECURITY_SCHEMES: list[dict[str, Any]] = [
     {"type": "oauth2", "scopes": ["mcp"]},
 ]
@@ -330,10 +307,10 @@ def _error_result(
             type="text",
             text=json.dumps(payload, ensure_ascii=False),
         )],
-        "is_error": True,
+        "isError": True,
     }
     if meta is not None:
-        kwargs["meta"] = meta
+        kwargs["_meta"] = meta
     return types.CallToolResult(**kwargs)
 
 
@@ -342,30 +319,21 @@ def build_server(tools: list[ToolHandler], client: FirmaradarClient) -> Server:
 
     Eksponert som offentlig funksjon (ikke prefix _) så tester kan bygge
     en server mot mock-client uten å gå via stdio-loopen.
-
-    MCP-SDK 2.0 fjernet ``@server.list_tools()``/``@server.call_tool()``-
-    dekoratorene (``Server.list_tools``/``call_tool`` finnes ikke lenger) —
-    handlere wires nå inn via ``on_list_tools=``/``on_call_tool=`` på
-    konstruktøren, og mottar begge ``(ctx, params)`` i stedet for de gamle
-    positional-argumentene.
     """
+    server = Server(_SERVER_NAME, instructions=_INSTRUCTIONS)
     tools_index = _tools_by_name(tools)
 
-    async def _list_tools(
-        ctx: ServerRequestContext[Any], params: types.PaginatedRequestParams | None
-    ) -> types.ListToolsResult:
-        return types.ListToolsResult(tools=[_handler_to_tool(h) for h in tools])
+    @server.list_tools()
+    async def _list_tools() -> list[types.Tool]:
+        return [_handler_to_tool(h) for h in tools]
 
-    async def _call_tool(
-        ctx: ServerRequestContext[Any], params: types.CallToolRequestParams
-    ) -> types.CallToolResult:
+    @server.call_tool()
+    async def _call_tool(name: str, arguments: dict | None) -> types.CallToolResult:
         # Vi returnerer alltid en CallToolResult: suksess med ``content`` +
         # ``structuredContent`` (speiler outputSchema), feil med ``isError=True``.
         # Det gjør at SDK-en tar resultatet as-is og hopper over streng
         # outputSchema-validering, så heterogene handler-retur-typer (modell,
         # dict, tuple) aldri kan crashe et kall.
-        name = params.name
-        arguments = params.arguments or {}
         handler = tools_index.get(name)
         if handler is None:
             return _error_result({
@@ -374,7 +342,7 @@ def build_server(tools: list[ToolHandler], client: FirmaradarClient) -> Server:
             })
         try:
             # Validér + parse argumenter via pydantic-modellen
-            tool_args = handler.input_schema(**arguments)
+            params = handler.input_schema(**(arguments or {}))
         except Exception as exc:  # pydantic.ValidationError er en Exception
             return _error_result({
                 "error": "Invalid arguments",
@@ -382,7 +350,7 @@ def build_server(tools: list[ToolHandler], client: FirmaradarClient) -> Server:
                 "details": str(exc),
             })
         try:
-            result = await handler.handler(client, tool_args)
+            result = await handler.handler(client, params)
         except NotImplementedError as exc:
             # v0.1-tools som ennå ikke har backend — gi pent feilsvar
             # istedenfor å crashe hele MCP-økten.
@@ -416,25 +384,10 @@ def build_server(tools: list[ToolHandler], client: FirmaradarClient) -> Server:
             })
         return types.CallToolResult(
             content=_result_to_text_content(result),
-            structured_content=_structured_content(handler, result),
+            structuredContent=_structured_content(handler, result),
         )
 
-    return Server(
-        _SERVER_NAME,
-        # Pre-eksisterende hull, funnet + fikset i samme slag som 2.0-
-        # migreringen (samme konstruktør-kall): uten dette rapporterte
-        # ``initialize``-svarets ``serverInfo.version`` feil verdi på
-        # remote-stien (StreamableHTTPSessionManager bygger init-options fra
-        # Server-objektet selv, IKKE fra _amain() sin InitializationOptions —
-        # den brukes kun av stdio). v1 falt tilbake til mcp-SDK-ens EGEN
-        # versjon (f.eks. "1.29.0"); v2 faller tilbake til tom streng. Stdio-
-        # stien var alltid korrekt (egen InitializationOptions med
-        # server_version=_SERVER_VERSION i _amain()) — uendret her.
-        version=_SERVER_VERSION,
-        instructions=_INSTRUCTIONS,
-        on_list_tools=_list_tools,
-        on_call_tool=_call_tool,
-    )
+    return server
 
 
 async def _amain() -> int:

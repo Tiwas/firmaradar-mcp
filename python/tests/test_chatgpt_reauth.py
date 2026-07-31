@@ -51,31 +51,20 @@ class TestErrorResultMeta:
 # ── server.py: securitySchemes på verktøy-annonse ──────────────────────
 
 class TestToolSecuritySchemes:
-    """securitySchemes lever under ``_meta`` siden mcp 2.0-migreringen
-    (2026-07-31) — IKKE top-level slik den lå til og med 0.5.11. Se
-    kommentaren ved ``_TOOL_SECURITY_SCHEMES`` i ``server.py``: mcp_types
-    2.0.0 sin per-metode wire-sieve dropper ethvert top-level Tool-felt
-    utenfor spec-en uansett retur-form; ``_meta`` er det eneste feltet som
-    overlever. Full-pipeline-overlevelse (gjennom den faktiske
-    ``tools/list``-silen) dekkes separat av
-    ``test_tool_list_wire_preserves_security_schemes_under_meta`` i
-    test_smoke.py — testene her dekker kun at ``_handler_to_tool`` legger
-    feltet på riktig sted i utgangspunktet."""
 
     def test_tool_advertises_oauth2_security_scheme(self):
         from firmaradar_mcp.server import _handler_to_tool
         from firmaradar_mcp.tools import ALL_TOOLS
         tool = _handler_to_tool(ALL_TOOLS[0])
         d = tool.model_dump(by_alias=True, exclude_none=True)
-        assert "securitySchemes" not in d, "securitySchemes skal IKKE ligge top-level lenger"
-        assert d.get("_meta", {}).get("securitySchemes") == [{"type": "oauth2", "scopes": ["mcp"]}]
+        assert d.get("securitySchemes") == [{"type": "oauth2", "scopes": ["mcp"]}]
 
     def test_all_tools_carry_security_schemes(self):
         from firmaradar_mcp.server import _handler_to_tool
         from firmaradar_mcp.tools import ALL_TOOLS
         for h in ALL_TOOLS:
             d = _handler_to_tool(h).model_dump(by_alias=True, exclude_none=True)
-            assert d.get("_meta", {}).get("securitySchemes"), f"{h.name} mangler _meta.securitySchemes"
+            assert d.get("securitySchemes"), f"{h.name} mangler securitySchemes"
 
 
 # ── remote_server.py: ChatGPT-deteksjon + routing ──────────────────────
