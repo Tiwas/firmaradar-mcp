@@ -60,8 +60,8 @@ class SubscribeNaceInput(BaseModel):
             "authenticate the delivery. Stored encrypted."
         ),
     )
-    events: list[EventType] | None = Field(
-        default=None,
+    events: list[EventType] = Field(
+        default_factory=list,
         description=(
             "Which event types to deliver. Omit for all of them. Restrict to "
             "e.g. ['status_changed'] to receive only bankruptcy/dissolution "
@@ -125,7 +125,7 @@ def _build_body(params: SubscribeNaceInput) -> dict[str, Any]:
         body["url"] = params.url
     if params.bearer_token is not None:
         body["bearer_token"] = params.bearer_token
-    if params.events is not None:
+    if params.events:
         body["events"] = list(params.events)
     if params.landsdel_filter is not None:
         body["landsdel_filter"] = params.landsdel_filter

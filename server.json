@@ -3,7 +3,7 @@
   "name": "no.firmaradar/mcp",
   "title": "Firmaradar",
   "description": "Norwegian company intelligence: ownership, roles, financials, risk, KYC/AML/PEP (multi-source)",
-  "version": "0.6.0",
+  "version": "0.6.1",
   "repository": {
     "url": "https://github.com/Tiwas/firmaradar-mcp",
     "source": "github"

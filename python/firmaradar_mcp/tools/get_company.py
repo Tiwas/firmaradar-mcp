@@ -31,8 +31,8 @@ class GetCompanyInput(BaseModel):
             "changes",
             "financial_metrics",
         ]
-    ] | None = Field(
-        default=None,
+    ] = Field(
+        default_factory=list,
         description=(
             "Subset of sections to include. Omit to get the default profile. "
             "Notable opt-in sections: `ip` — intellectual-property portfolio "

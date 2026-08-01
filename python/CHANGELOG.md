@@ -11,6 +11,20 @@ workflow-nodene på samme funksjonalitets-baseline.
 
 ---
 
+## [0.6.1] — 2026-08-01
+
+### Fixed
+
+- **`get_company.fields` and `subscribe_nace.events`: dropped the
+  nullable-array (`anyOf: [array, null]`) schema shape in favour of a plain
+  `array` with an empty-list default.** Both fields were `list[Literal[...]]
+  | None = None`; Pydantic renders that as an `anyOf` union between the array
+  type and `null`, which OpenAI's ChatGPT-app tool scanner flags as an
+  ambiguous "single string or array" type. Calling behaviour is unchanged
+  (omit the field for "no filter" / "all events"); `subscribe_nace`'s body
+  builder now checks truthiness instead of `is not None` so an empty list
+  still omits the field from the outgoing request.
+
 ## [0.6.0] — 2026-07-31
 
 ### Changed
