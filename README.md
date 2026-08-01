@@ -26,7 +26,7 @@
 
 Firmaradar er Norges agentiske infrastruktur for selskapsdata. Denne MCP-serveren gir AI-agenten din direkte tilgang til:
 
-- **2,1 millioner norske enheter** (BRREG-grunnregister, oppdatert daglig)
+- **Mer enn 2 millioner norske enheter** (BRREG-grunnregister, oppdatert daglig)
 - **Aksjeeierregisteret** fra Skatteetaten (eierandeler ned til person-nivå, opp gjennom hele konsernet)
 - **Roller** (styre, daglig leder, prokura) med historikk
 - **Regnskap** (årsregnskap, mellombalanser, signaler)
