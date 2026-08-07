@@ -479,9 +479,9 @@ def create_app(
         env, fallback ``https://firmaradar.no``).
       timeout_s: HTTP-timeout for backend-kall. ``None`` → les
         ``FIRMARADAR_MCP_TIMEOUT_S`` (default 90s). Hevet fra 30s fordi den
-        deterministiske FIV-vurderingen (``/api/v1/fiv/assess``, NUES a-e + full
-        kildeinnsamling) lovlig kan ta 30-50s for enkelte selskap → ga
-        ``httpcore.ReadTimeout`` (HTTP 500 i ChatGPT) på 30s.
+        deterministiske FIV-vurderingen (``/api/v1/fiv/assess``, GBER art. 2(18)
+        kriterium a-e + full kildeinnsamling) lovlig kan ta 30-50s for enkelte
+        selskap → ga ``httpcore.ReadTimeout`` (HTTP 500 i ChatGPT) på 30s.
       stateless: Hvis True, ingen MCP-session-persistens mellom requests
         (anbefales for Android — mobil-tilkoblinger er ofte korte).
 

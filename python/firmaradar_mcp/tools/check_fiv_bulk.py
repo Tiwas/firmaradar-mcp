@@ -63,6 +63,22 @@ class BulkFivResult(BaseModel):
     )
     score: float | None = None
     confidence: float | None = None
+    distress_basis: str | None = Field(
+        default=None,
+        description=(
+            "Which level of the two-level assessment makes the company "
+            "distressed: company, group or company_and_group. 'group' means "
+            "the company's own accounts are clean but its group is in "
+            "difficulty — sufficient under GBER art. 2(18)."
+        ),
+    )
+    rescuable_by_group: bool = Field(
+        default=False,
+        description=(
+            "True when the company triggers only the capital criterion and "
+            "its group is sound enough to remedy it before the aid is granted."
+        ),
+    )
     # Full backend-respons per orgnr — ekskludert fra serialisering (blåste opp
     # svaret → ChatGPT trunkerte). De strukturerte feltene over er nok for agenten.
     raw: dict[str, Any] | None = Field(default=None, exclude=True)
@@ -74,8 +90,13 @@ class BulkMeta(BaseModel):
     failed: int
 
 
-# 3-stegs-dom (speiler firmaradar.fiv): Ja / Tvil / Nei (*).
-_FIV_VERDICT = {
+# Nød-fallback for dommen. Backend beregner dommen (``firmaradar.fiv``) og
+# sender den med i hvert resultat som ``verdict.label`` — den er kilden. Denne
+# tabellen brukes KUN når et eldre backend-svar mangler feltet, og dekker
+# derfor bare grunn-dommene: konsern-variantene «Ja (konsern)» og «Ja (!)»
+# kan ikke utledes av status alene. (Pakken er frittstående og publiseres til
+# PyPI, så den kan ikke importere backend-modulen.)
+_FIV_VERDICT_FALLBACK = {
     "distressed": "Ja",
     "not_distressed": "Nei (*)",
     "exempt_young_company": "Nei (*)",
@@ -85,16 +106,30 @@ _FIV_VERDICT = {
 }
 
 
+def _verdict_label(result: BulkFivResult) -> str:
+    """Dommen for ett orgnr — backend først, statustabell som fallback."""
+    raw = result.raw if isinstance(result.raw, dict) else {}
+    block = raw.get("verdict")
+    if isinstance(block, dict):
+        label = block.get("label")
+        if label:
+            return str(label)
+    status = (result.status or "").strip().lower()
+    return _FIV_VERDICT_FALLBACK.get(status, result.status or "—")
+
+
 def _fiv_bulk_summary_table(results: list[BulkFivResult]) -> str:
-    """Kompakt markdown-tabell over bulk-FIV-dommene (Ja/Tvil/Nei (*))."""
-    lines = ["| Orgnr | FIV-dom |", "|---|---|"]
+    """Kompakt markdown-tabell over bulk-FIV-dommene.
+
+    Kolonnen «Grunnlag» viser hvilket ledd i to-nivå-testen som utløste
+    dommen, slik at et «Ja (konsern)» ikke forveksles med selskapets egne tall.
+    """
+    lines = ["| Orgnr | FIV-dom | Grunnlag |", "|---|---|---|"]
     for r in results:
         if r.error:
-            lines.append(f"| {r.orgnr} | {r.error} |")
+            lines.append(f"| {r.orgnr} | {r.error} | — |")
         else:
-            lines.append(
-                f"| {r.orgnr} | {_FIV_VERDICT.get((r.status or '').strip().lower(), r.status or '—')} |"
-            )
+            lines.append(f"| {r.orgnr} | {_verdict_label(r)} | {r.distress_basis or '—'} |")
     return "\n".join(lines)
 
 
@@ -144,6 +179,8 @@ def _coerce_result(raw: dict[str, Any], fallback_orgnr: str) -> BulkFivResult:
         error=raw.get("error") if isinstance(raw.get("error"), str) else None,
         score=score,
         confidence=confidence,
+        distress_basis=raw.get("distress_basis") or None,
+        rescuable_by_group=bool(raw.get("rescuable_by_group")),
         raw=raw,
     )
 
@@ -184,7 +221,8 @@ HANDLER = ToolHandler(
     name="firmaradar_check_fiv_bulk",
     description=(
         "Bulk-endpoint for portfolio-screening of 'foretak i vanskeligheter' "
-        "(financially distressed companies per NUES rules a-e). Max 50 orgnr "
+        "(financially distressed companies per EU GBER art. 2(18) criteria "
+        "a-e, assessed at both company and group level). Max 50 orgnr "
         "per call. Each orgnr counts as one unit against your quota. "
         "Compliance-gates (ENK blocking, invalid orgnr) are returned per "
         "orgnr in the result list instead of failing the whole call — check "

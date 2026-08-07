@@ -2,7 +2,7 @@
 
 These tests verify that:
 
-* The 35-tool registry imports and exposes all expected names.
+* The 36-tool registry imports and exposes all expected names.
 * Every tool has a user-friendly title and accurate MCP
   ``ToolAnnotations`` (readOnlyHint etc.) — required by the connector
   directories.
@@ -32,12 +32,13 @@ from firmaradar_mcp.tools import ALL_TOOLS
 
 
 EXPECTED_TOOL_NAMES = {
-    # Selskap (7)
+    # Selskap (8)
     "firmaradar_search_companies",
     "firmaradar_get_company",
     "firmaradar_get_company_ownership",
     "firmaradar_get_company_roles",
     "firmaradar_get_company_financials",
+    "firmaradar_get_regnskapsrapport",
     "firmaradar_get_company_announcements",
     "firmaradar_get_company_ip",
     # Person (4)
@@ -84,7 +85,7 @@ EXPECTED_TOOL_NAMES = {
 def test_registry_lists_all_tools() -> None:
     names = {tool.name for tool in ALL_TOOLS}
     assert names == EXPECTED_TOOL_NAMES, names.symmetric_difference(EXPECTED_TOOL_NAMES)
-    assert len(ALL_TOOLS) == 35
+    assert len(ALL_TOOLS) == 36
 
 
 def test_every_tool_has_description_and_schemas() -> None:
@@ -174,6 +175,7 @@ def test_write_and_destructive_tool_sets() -> None:
         "firmaradar_subscribe_nace",
         "firmaradar_delete_subscription",
         "firmaradar_add_company_monitoring",
+        "firmaradar_get_regnskapsrapport",
     }
     assert WRITE_TOOLS <= names, WRITE_TOOLS - names
     assert OPEN_WORLD_TOOLS == frozenset()

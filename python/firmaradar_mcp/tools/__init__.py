@@ -72,6 +72,7 @@ from . import (  # noqa: E402
     get_person_companies,
     get_person_roles,
     get_recent_changes,
+    get_regnskapsrapport,
     get_risk_score,
     get_risk_score_bulk,
     list_companies_in_nace,
@@ -92,6 +93,7 @@ ALL_TOOLS: list[ToolHandler] = [
     get_company_ownership.HANDLER,
     get_company_roles.HANDLER,
     get_company_financials.HANDLER,
+    get_regnskapsrapport.HANDLER,
     get_company_announcements.HANDLER,
     # Person (4)
     search_persons.HANDLER,
@@ -156,6 +158,7 @@ TOOL_TITLES: dict[str, str] = {
     "firmaradar_get_company_ownership": "Get Company Ownership",
     "firmaradar_get_company_roles": "Get Company Roles",
     "firmaradar_get_company_financials": "Get Company Financials",
+    "firmaradar_get_regnskapsrapport": "Get Financial Report (Excel/PDF)",
     "firmaradar_get_company_announcements": "Get Company Announcements",
     "firmaradar_get_company_ip": "Get Company IP Rights",
     "firmaradar_search_persons": "Search Persons",
@@ -198,6 +201,10 @@ TOOL_TITLES: dict[str, str] = {
 #   (``extension_kundebekreftelse_event``).
 # * ``subscribe_nace`` upserts a NACE industry-monitoring subscription.
 # * ``delete_subscription`` removes one (see ``DESTRUCTIVE_TOOLS``).
+# * ``get_regnskapsrapport`` charges credits (1 per delivered financial
+#   year) and mints a fresh signed download token on every call — no
+#   durable DB resource is created (stateless token design), but the
+#   billing side effect makes it a write, not a pure lookup.
 WRITE_TOOLS: frozenset[str] = frozenset({
     "firmaradar_check_aml_pep",
     "firmaradar_get_aml_score",
@@ -206,6 +213,7 @@ WRITE_TOOLS: frozenset[str] = frozenset({
     "firmaradar_subscribe_nace",
     "firmaradar_delete_subscription",
     "firmaradar_add_company_monitoring",
+    "firmaradar_get_regnskapsrapport",
 })
 
 # Tools that can write to public internet state or external third-party
@@ -233,10 +241,13 @@ DESTRUCTIVE_TOOLS: frozenset[str] = frozenset({
 # * ``check_aml_pep`` appends a new per-call AML/PEP audit record every time.
 # * ``get_aml_score`` stores a new auditable AML report record every time.
 # * ``start_aml_report`` creates a new async AML report job every time.
+# * ``get_regnskapsrapport`` charges credits again and mints a new
+#   download token every time — repeat calls are not free/no-ops.
 NON_IDEMPOTENT_TOOLS: frozenset[str] = frozenset({
     "firmaradar_check_aml_pep",
     "firmaradar_get_aml_score",
     "firmaradar_start_aml_report",
+    "firmaradar_get_regnskapsrapport",
 })
 
 

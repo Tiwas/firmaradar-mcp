@@ -1,6 +1,6 @@
 """MCP stdio-server entry point.
 
-Boots the Model Context Protocol server, registers all 35 tools, and
+Boots the Model Context Protocol server, registers all 36 tools, and
 runs the stdio event loop. Each tool is implemented as a small
 self-contained module under :mod:`firmaradar_mcp.tools`; this file
 orchestrates registration and dispatch.
@@ -297,12 +297,58 @@ _REAUTH_META: dict[str, Any] = {"mcp/www_authenticate": [_REAUTH_WWW_AUTHENTICAT
 # serialize_server_result) mot ekte ``mcp==2.0.0`` på alle forhandlingsbare
 # protokollversjoner. Se ``_handler_to_tool``.
 #
-# KJENT RISIKO (uverifisert herfra): dette ER en wire-formendring — feltet
-# flytter fra ``tool.securitySchemes`` til ``tool._meta.securitySchemes``.
-# Om OpenAI sin Apps SDK-klient faktisk leser ``_meta`` for dette (vs. kun
-# top-level, som var den opprinnelig OpenAI-support-bekreftede plasseringen
-# 2026-03) er IKKE bekreftet — krever test mot en ekte ChatGPT-connector
-# før dette strekkes til å garantere at re-auth-UI-en fortsatt trigges.
+# KJENT RISIKO — status 2026-08-03 etter en egen verifiseringsrunde.
+# Tre av fire spørsmål er nå LUKKET; det fjerde krever fortsatt ChatGPT.
+#
+# ✅ VERIFISERT 1 — vi sender feltet, på alle protokollversjoner.
+#    Kjørt in-process i ``firmaradar_mcp_remote`` mot ekte ``mcp==2.0.0`` +
+#    ``mcp_types==2.0.0``: ``_dump_result`` → ``serialize_server_result``
+#    for ``2025-06-18``, ``2025-03-26`` og ``2024-11-05`` gir alle
+#    ``len(result["tools"]) == 35``, 35/35 med
+#    ``_meta.securitySchemes == [{"type": "oauth2", "scopes": ["mcp"]}]``
+#    og 0 top-level-lekkasjer.
+#
+# ✅ VERIFISERT 2 — top-level er BEVISLIG umulig, ikke bare upraktisk.
+#    Motbevis-jakt med tre uavhengige strategier, alle mot ekte 2.0.0:
+#    (a) ``types.Tool(..., _meta=...)``, (b) rått dict med BÅDE top-level og
+#    ``_meta``, (c) ``Tool``-subclass med ``model_config extra="allow"``.
+#    Alle tre: top-level-feltet borte etter sila, ``_meta`` intakt.
+#    ``mcp_types.Tool.model_config["extra"]`` er ``None`` (= pydantic-default
+#    ``ignore``), og ``serialize_server_result`` sin egen docstring sier det
+#    rett ut: «The surface model carries ``extra="ignore"``, so fields not in
+#    ``version``'s schema are dropped». Å sende BEGGE plasseringene — som er
+#    formen OpenAI sitt eget referanse-eksempel bruker — er altså IKKE mulig
+#    gjennom SDK-ens serialiseringssti.
+#
+# ✅ VERIFISERT 3 — ``_meta``-plasseringen er OFFISIELT dokumentert av OpenAI.
+#    Apps SDK-referansen («_meta fields on tool descriptor») lister
+#    ``_meta["securitySchemes"]`` | Placement: Tool descriptor | Type: array,
+#    med formål «Back-compat mirror for clients that only read ``_meta``».
+#    Referanse-eksempelet deres emitterer begge. Så plasseringen er sanksjonert
+#    — men formuleringen sier IKKE at ChatGPT selv leser den.
+#
+# ❌ FORTSATT ÅPENT — leser ChatGPT ``_meta`` når top-level MANGLER?
+#    Dette kan ikke avgjøres herfra: verken lokalt (vi kontrollerer bare
+#    server-siden, og den er nå bevist korrekt), fra en lokal 2.x-referanse-
+#    klient (den ville bare re-bevise punkt 1), eller fra dokumentasjonen
+#    (punkt 3 er tvetydig på nettopp dette). Det krever OpenAI sin egen
+#    klient. EKSAKT ekstern hendelse som må inntreffe, én av to:
+#      1. ChatGPT-appen godkjennes og installeres, og et Firmaradar-token
+#         utløper/tilbakekalles under en ekte økt → viser ChatGPT inline
+#         re-auth-UI, eller bare en feilmelding? (Kan fremtvinges etter
+#         godkjenning ved å revoke API-nøkkelen midt i en økt.)
+#      2. OpenAI-reviewen svarer «requested changes» som eksplisitt nevner
+#         manglende/uleselig ``securitySchemes``.
+#    NB: submissionen ble avvist 2026-08-01 på et ANNET grunnlag (ustabile
+#    testtilfeller, se ``backups/deleted/2026-08-04-plans-ferdige/INCIDENT_2026-08-01_EXTERNAL_SUBMISSIONS_AND_AGENT.md``)
+#    — securitySchemes ble ikke nevnt. Det er svakt indisium, ikke bevis.
+#
+# 🛠 MULIG AVBØTING hvis punkt 4 slår negativt ut: ``remote_server.py`` har
+#    allerede ASGI-``send``-wrapping (``_make_session_capturing_send``), så en
+#    respons-rewriter kan re-injisere top-level ``securitySchemes`` i
+#    ``tools/list``-svaret ETTER SDK-serialiseringen. Ikke gjort: det er en
+#    wire-endring midt i en pågående OpenAI-review, og Streamable HTTP sin
+#    SSE-framing gjør body-rewriting ikke-trivielt. Krever Lars' beslutning.
 _TOOL_SECURITY_SCHEMES: list[dict[str, Any]] = [
     {"type": "oauth2", "scopes": ["mcp"]},
 ]

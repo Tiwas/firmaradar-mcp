@@ -80,7 +80,7 @@ Hent API-nøkkel: **[firmaradar.no/min-side/api-keys](https://firmaradar.no/min-
 
 ## Verktøykatalog
 
-35 verktøy. Python-pakka (`firmaradar-mcp` på PyPI) og remote-serveren (`mcp.firmaradar.no`) eksponerer alle 35; TypeScript-pakka (`@firmaradar/mcp-server` på npm) dekker foreløpig de 17 opprinnelige:
+35 verktøy — Python-pakka (`firmaradar-mcp` på PyPI) og remote-serveren (`mcp.firmaradar.no`) eksponerer alle:
 
 ### Selskaps-oppslag
 - `firmaradar_search_companies` — søk på navn eller orgnr
@@ -175,16 +175,14 @@ Hele sikkerhets-policyen: **[firmaradar.no/personvern](https://firmaradar.no/per
 ```
 tools/mcp_server/
 ├── README.md                 — denne filen
-├── python/                   — pip-pakken «firmaradar-mcp» (PyPI)
-│   ├── pyproject.toml
-│   ├── firmaradar_mcp/
-│   │   ├── server.py         — MCP stdio og ekstern (streamable-HTTP)
-│   │   ├── remote_server.py  — OAuth 2.0 og DCR for Claude Mobile/Web
-│   │   ├── client.py         — REST-API-wrapper
-│   │   └── tools/            — 35 verktøy-moduler
-│   └── tests/
-└── typescript/               — npm-pakken «@firmaradar/mcp-server»
-    └── src/
+└── python/                   — pip-pakken «firmaradar-mcp» (PyPI)
+    ├── pyproject.toml
+    ├── firmaradar_mcp/
+    │   ├── server.py         — MCP stdio og ekstern (streamable-HTTP)
+    │   ├── remote_server.py  — OAuth 2.0 og DCR for Claude Mobile/Web
+    │   ├── client.py         — REST-API-wrapper
+    │   └── tools/            — 35 verktøy-moduler
+    └── tests/
 ```
 
 ---
